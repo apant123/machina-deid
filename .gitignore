@@ -1,0 +1,25 @@
+# Secrets & environment
+.env
+*.pem
+*.key
+
+# Python virtualenvs & caches
+.venv/
+.venv312/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+
+# Large data / harvest / staging artifacts
+data/
+*.parquet
+*.jsonl
+*.zip
+*.tar*
+*.7z
+*.rar
+*.iso
+
+# OS / editor clutter
+.DS_Store

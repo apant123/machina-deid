@@ -1,0 +1,719 @@
+{
+  "total_objs": 188718,
+  "total_bytes": 139545101305,
+  "unique_objs": 147860,
+  "unique_bytes": 113364764963,
+  "zero_byte": 24,
+  "non_ascii_keys": 7221,
+  "top_prefixes": {
+    "catalog": {
+      "count": 3535,
+      "bytes": 2674630183
+    },
+    "existing": {
+      "count": 4444,
+      "bytes": 9150800133
+    },
+    "github": {
+      "count": 178456,
+      "bytes": 125747294812
+    },
+    "gitlab": {
+      "count": 794,
+      "bytes": 741425313
+    },
+    "web": {
+      "count": 1489,
+      "bytes": 1230950864
+    }
+  },
+  "repo_owner_counts": {
+    "github": 525,
+    "gitlab": 5
+  },
+  "ext_stats": {
+    "resume-partial": {
+      "count": 2,
+      "bytes": 70738748,
+      "max_bytes": 42278068
+    },
+    "7z": {
+      "count": 8,
+      "bytes": 193408391,
+      "max_bytes": 135233897
+    },
+    "sldprt": {
+      "count": 18795,
+      "bytes": 8658649769,
+      "max_bytes": 85827715
+    },
+    "step": {
+      "count": 57701,
+      "bytes": 45828363152,
+      "max_bytes": 1419617871
+    },
+    "sldasm": {
+      "count": 2543,
+      "bytes": 5922255830,
+      "max_bytes": 234886581
+    },
+    "stp": {
+      "count": 4525,
+      "bytes": 7889049112,
+      "max_bytes": 209120146
+    },
+    "pdf": {
+      "count": 10342,
+      "bytes": 6063540104,
+      "max_bytes": 91358535
+    },
+    "ipt": {
+      "count": 5611,
+      "bytes": 2061045760,
+      "max_bytes": 50270208
+    },
+    "dwg": {
+      "count": 758,
+      "bytes": 274808057,
+      "max_bytes": 11948830
+    },
+    "png": {
+      "count": 711,
+      "bytes": 126198661,
+      "max_bytes": 7807253
+    },
+    "stl": {
+      "count": 12768,
+      "bytes": 14943174683,
+      "max_bytes": 633495784
+    },
+    "zip": {
+      "count": 1641,
+      "bytes": 5731732055,
+      "max_bytes": 288440869
+    },
+    "iam": {
+      "count": 1053,
+      "bytes": 562065920,
+      "max_bytes": 29486080
+    },
+    "jpg": {
+      "count": 592,
+      "bytes": 232869112,
+      "max_bytes": 10451472
+    },
+    "ipj": {
+      "count": 15,
+      "bytes": 108360,
+      "max_bytes": 15204
+    },
+    "idw": {
+      "count": 256,
+      "bytes": 156658688,
+      "max_bytes": 9720832
+    },
+    "ipn": {
+      "count": 40,
+      "bytes": 6717440,
+      "max_bytes": 935424
+    },
+    "fcstd": {
+      "count": 4717,
+      "bytes": 3102125597,
+      "max_bytes": 90926843
+    },
+    "slddrw": {
+      "count": 1593,
+      "bytes": 998641015,
+      "max_bytes": 56954388
+    },
+    "iges": {
+      "count": 340,
+      "bytes": 3644445745,
+      "max_bytes": 602981334
+    },
+    "scad": {
+      "count": 1,
+      "bytes": 3881,
+      "max_bytes": 3881
+    },
+    "igs": {
+      "count": 597,
+      "bytes": 806813030,
+      "max_bytes": 26979399
+    },
+    "svg": {
+      "count": 7863,
+      "bytes": 1539472061,
+      "max_bytes": 79141724
+    },
+    "1": {
+      "count": 14313,
+      "bytes": 10889995809,
+      "max_bytes": 90540756
+    },
+    "9": {
+      "count": 11,
+      "bytes": 2638171,
+      "max_bytes": 905278
+    },
+    "20": {
+      "count": 3,
+      "bytes": 962918,
+      "max_bytes": 626959
+    },
+    "11": {
+      "count": 6,
+      "bytes": 4108085,
+      "max_bytes": 2697729
+    },
+    "7": {
+      "count": 16,
+      "bytes": 6398762,
+      "max_bytes": 2590360
+    },
+    "2": {
+      "count": 591,
+      "bytes": 129637549,
+      "max_bytes": 4421918
+    },
+    "3": {
+      "count": 106,
+      "bytes": 46661991,
+      "max_bytes": 6933329
+    },
+    "13": {
+      "count": 9,
+      "bytes": 3353509,
+      "max_bytes": 743157
+    },
+    "6": {
+      "count": 22,
+      "bytes": 10415324,
+      "max_bytes": 2497217
+    },
+    "4": {
+      "count": 60,
+      "bytes": 29450238,
+      "max_bytes": 14452292
+    },
+    "18": {
+      "count": 4,
+      "bytes": 2985614,
+      "max_bytes": 2355009
+    },
+    "17": {
+      "count": 5,
+      "bytes": 4659177,
+      "max_bytes": 2518009
+    },
+    "dxf": {
+      "count": 1625,
+      "bytes": 557533753,
+      "max_bytes": 17615405
+    },
+    "rar": {
+      "count": 7,
+      "bytes": 140576749,
+      "max_bytes": 63413691
+    },
+    "catpart": {
+      "count": 280,
+      "bytes": 139758778,
+      "max_bytes": 6931673
+    },
+    "x_t": {
+      "count": 161,
+      "bytes": 44380878,
+      "max_bytes": 3052393
+    },
+    "f3d": {
+      "count": 719,
+      "bytes": 1475901046,
+      "max_bytes": 99914327
+    },
+    "tar": {
+      "count": 57,
+      "bytes": 1247245824,
+      "max_bytes": 112875520
+    },
+    "gz": {
+      "count": 826,
+      "bytes": 193894170,
+      "max_bytes": 84398080
+    },
+    "f3z": {
+      "count": 61,
+      "bytes": 336467943,
+      "max_bytes": 63398721
+    },
+    "par": {
+      "count": 384,
+      "bytes": 248618672,
+      "max_bytes": 4436480
+    },
+    "asm": {
+      "count": 813,
+      "bytes": 108618203,
+      "max_bytes": 5439488
+    },
+    "sat": {
+      "count": 26379,
+      "bytes": 4487839115,
+      "max_bytes": 249406292
+    },
+    "prt": {
+      "count": 921,
+      "bytes": 339369801,
+      "max_bytes": 19376539
+    },
+    "x_b": {
+      "count": 293,
+      "bytes": 534410397,
+      "max_bytes": 84026016
+    },
+    "obj": {
+      "count": 461,
+      "bytes": 4108836262,
+      "max_bytes": 602234862
+    },
+    "jt": {
+      "count": 1465,
+      "bytes": 24326870,
+      "max_bytes": 203386
+    },
+    "drw": {
+      "count": 42,
+      "bytes": 8209937,
+      "max_bytes": 1985942
+    },
+    "3mf": {
+      "count": 723,
+      "bytes": 2991657129,
+      "max_bytes": 297247399
+    },
+    "eps": {
+      "count": 27,
+      "bytes": 18215598,
+      "max_bytes": 7578716
+    },
+    "wrl": {
+      "count": 3551,
+      "bytes": 1107851277,
+      "max_bytes": 39982155
+    },
+    "3ds": {
+      "count": 1,
+      "bytes": 314309,
+      "max_bytes": 314309
+    },
+    "brep": {
+      "count": 48,
+      "bytes": 7222859,
+      "max_bytes": 798750
+    },
+    "u3d": {
+      "count": 286,
+      "bytes": 229083112,
+      "max_bytes": 18081668
+    },
+    "slddrt": {
+      "count": 22,
+      "bytes": 66811545,
+      "max_bytes": 3340288
+    },
+    "drwdot": {
+      "count": 40,
+      "bytes": 2792904,
+      "max_bytes": 344764
+    },
+    "catproduct": {
+      "count": 31,
+      "bytes": 10029427,
+      "max_bytes": 6563321
+    },
+    "catdrawing": {
+      "count": 24,
+      "bytes": 25594471,
+      "max_bytes": 8848783
+    },
+    "jpeg": {
+      "count": 41,
+      "bytes": 31524902,
+      "max_bytes": 3925784
+    },
+    "sldlfp": {
+      "count": 35,
+      "bytes": 5301787,
+      "max_bytes": 511705
+    },
+    "odg": {
+      "count": 7,
+      "bytes": 3097107,
+      "max_bytes": 1191579
+    },
+    "off": {
+      "count": 2,
+      "bytes": 1915,
+      "max_bytes": 958
+    },
+    "asmdot": {
+      "count": 5,
+      "bytes": 144519,
+      "max_bytes": 28932
+    },
+    "prtdot": {
+      "count": 62,
+      "bytes": 24105081,
+      "max_bytes": 1474048
+    },
+    "dft": {
+      "count": 30,
+      "bytes": 11952128,
+      "max_bytes": 503808
+    },
+    "16": {
+      "count": 3,
+      "bytes": 2254807,
+      "max_bytes": 1322884
+    },
+    "ps": {
+      "count": 358,
+      "bytes": 12392339,
+      "max_bytes": 1628016
+    },
+    "neu": {
+      "count": 109,
+      "bytes": 25818424,
+      "max_bytes": 1890564
+    },
+    "5": {
+      "count": 34,
+      "bytes": 8754714,
+      "max_bytes": 1487082
+    },
+    "10": {
+      "count": 10,
+      "bytes": 10162309,
+      "max_bytes": 2659654
+    },
+    "z": {
+      "count": 719,
+      "bytes": 384385656,
+      "max_bytes": 86860837
+    },
+    "200": {
+      "count": 1,
+      "bytes": 1081045,
+      "max_bytes": 1081045
+    },
+    "8": {
+      "count": 14,
+      "bytes": 6976654,
+      "max_bytes": 3868393
+    },
+    "12": {
+      "count": 5,
+      "bytes": 3495594,
+      "max_bytes": 1559573
+    },
+    "15": {
+      "count": 1,
+      "bytes": 20304,
+      "max_bytes": 20304
+    },
+    "24": {
+      "count": 2,
+      "bytes": 275917,
+      "max_bytes": 240689
+    },
+    "14": {
+      "count": 6,
+      "bytes": 5536732,
+      "max_bytes": 4039801
+    },
+    "23": {
+      "count": 1,
+      "bytes": 970468,
+      "max_bytes": 970468
+    },
+    "38": {
+      "count": 1,
+      "bytes": 1331027,
+      "max_bytes": 1331027
+    },
+    "22": {
+      "count": 1,
+      "bytes": 43694,
+      "max_bytes": 43694
+    },
+    "25": {
+      "count": 2,
+      "bytes": 658608,
+      "max_bytes": 609915
+    },
+    "31": {
+      "count": 1,
+      "bytes": 984204,
+      "max_bytes": 984204
+    },
+    "26": {
+      "count": 1,
+      "bytes": 57088,
+      "max_bytes": 57088
+    },
+    "29": {
+      "count": 1,
+      "bytes": 474345,
+      "max_bytes": 474345
+    },
+    "33": {
+      "count": 1,
+      "bytes": 300416,
+      "max_bytes": 300416
+    },
+    "41": {
+      "count": 1,
+      "bytes": 324557,
+      "max_bytes": 324557
+    },
+    "19": {
+      "count": 1,
+      "bytes": 94640,
+      "max_bytes": 94640
+    },
+    "43": {
+      "count": 1,
+      "bytes": 84947,
+      "max_bytes": 84947
+    },
+    "35": {
+      "count": 1,
+      "bytes": 520055,
+      "max_bytes": 520055
+    },
+    "mf1": {
+      "count": 12,
+      "bytes": 345145344,
+      "max_bytes": 118038528
+    },
+    "unv": {
+      "count": 289,
+      "bytes": 212090986,
+      "max_bytes": 11029351
+    },
+    "tif": {
+      "count": 4,
+      "bytes": 11240604,
+      "max_bytes": 3733200
+    },
+    "xmt_txt": {
+      "count": 84,
+      "bytes": 19226877,
+      "max_bytes": 4625540
+    },
+    "xmt_bin": {
+      "count": 1,
+      "bytes": 53456,
+      "max_bytes": 53456
+    },
+    "tgz": {
+      "count": 1,
+      "bytes": 13194119,
+      "max_bytes": 13194119
+    },
+    "brp": {
+      "count": 5,
+      "bytes": 1310589,
+      "max_bytes": 447216
+    }
+  },
+  "compound_numeric_exts": {
+    "prt.<num>": 7539,
+    "asm.<num>": 3094,
+    "drw.<num>": 4602
+  },
+  "archives": {
+    "paired": 767,
+    "unpaired": 2492,
+    "unpaired_bytes": 2180724793
+  },
+  "magic_probe": {
+    "sldprt": {
+      "Other (7429ffd000000004)": 1,
+      "Other (8a0608d700000004)": 1,
+      "Other (8171da2500000004)": 1,
+      "Other (3b166fd800000004)": 1,
+      "Other (5e26d4e300000004)": 1,
+      "Other (efa8b22200000004)": 1,
+      "Other (8f1c592a00000004)": 1,
+      "Other (d7c1f6ae00000004)": 1,
+      "Other (cc0aa21100000004)": 2,
+      "Other (5160f03900000004)": 1,
+      "Other (180800ef00000004)": 1,
+      "Other (ae76224500000004)": 1,
+      "Other (a716a2a000000004)": 1,
+      "Other (2424e78800000004)": 1,
+      "Other (5704dedd00000004)": 1,
+      "Other (bbb0570300000004)": 1,
+      "Other (b82f73e200000004)": 1,
+      "Other (2656ad2900000004)": 1,
+      "Other (633645ae00000004)": 1,
+      "Other (59bc7ea800000004)": 1,
+      "Other (23daac8300000004)": 1,
+      "Other (70b2ea7900000004)": 1,
+      "Other (7a607cee00000004)": 1,
+      "Other (2c2887a200000004)": 1,
+      "Other (9fc6cc8000000004)": 1,
+      "Other (0897389c00000004)": 1,
+      "Other (db31305e00000004)": 1,
+      "Other (c399993f00000004)": 1,
+      "Other (48a78ff900000004)": 1,
+      "Other (fb3018f600000004)": 1,
+      "Other (7fcfb6aa00000004)": 1,
+      "Other (10509bc800000004)": 1,
+      "Other (0031e52400000004)": 1,
+      "Other (1544b0af00000004)": 1,
+      "Other (3fec4b2800000004)": 1,
+      "Other (c736c6aa00000004)": 1,
+      "Other (cfef220300000004)": 1,
+      "Other (84c6c3b100000004)": 1,
+      "Other (41d6b86100000004)": 1
+    },
+    "sldasm": {
+      "Other (67e7030a00000004)": 1,
+      "Other (e55adce900000004)": 1,
+      "Other (4e39f18e00000004)": 1,
+      "Other (adf14fe200000004)": 1,
+      "Other (3059467500000004)": 1,
+      "Other (0a8b6bd800000004)": 1,
+      "Other (430d5e9000000004)": 1,
+      "Other (120b2adb00000004)": 1,
+      "Other (7e5b7e1700000004)": 1,
+      "Other (e781e26800000004)": 1,
+      "Other (3234092c00000004)": 1,
+      "Other (b1dba89300000004)": 1,
+      "Other (92f71aed00000004)": 1,
+      "Other (6d5149a400000004)": 1,
+      "Other (c55cef6500000004)": 1,
+      "Other (4eb60a9700000004)": 1,
+      "Other (ef42117c00000004)": 1,
+      "Other (075d985f00000004)": 1,
+      "Other (ca80ec2e00000004)": 1,
+      "Other (8273c78400000004)": 1,
+      "Other (0e73d71d00000004)": 1,
+      "Other (54f746e400000004)": 1,
+      "Other (7c9ef8de00000004)": 1,
+      "Other (4f0cf9f300000004)": 1,
+      "OLE2 (D0CF11E0)": 16
+    },
+    "slddrw": {
+      "Other (ffb7c72300000004)": 1,
+      "Other (6edef1c200000004)": 1,
+      "Other (808d3ed100000004)": 1,
+      "Other (57c7505900000004)": 1,
+      "Other (7301f47700000004)": 1,
+      "Other (2552d26a00000004)": 1,
+      "Other (d3828e4d00000004)": 1,
+      "Other (5488dd3d00000004)": 1,
+      "Other (9fe4189f00000004)": 1,
+      "Other (c7c2806300000004)": 1,
+      "OLE2 (D0CF11E0)": 30
+    },
+    "ipt": {
+      "OLE2 (D0CF11E0)": 40
+    },
+    "iam": {
+      "OLE2 (D0CF11E0)": 40
+    },
+    "stl": {
+      "ASCII STL": 30,
+      "Binary STL": 10
+    },
+    "1": {
+      "Creo (#UGC)": 40
+    }
+  },
+  "largest_files": [
+    {
+      "bytes": 1419617871,
+      "key": "sources/github/loongOpen__OpenLoong-Hardware/QingLoong V2.5/zh/\u9752\u9f99V2.5 - \u4e09\u7ef4\u6587\u6863/TA00-\u5404\u6a21\u5757\u88c5\u914d\u4f53-\u4e09\u7ef4\u56fe\u7eb8/TA00-\u9752\u9f99\u4eba\u5f62\u673a\u5668\u4eba-\u603b\u88c5\u914d.STEP"
+    },
+    {
+      "bytes": 1419617871,
+      "key": "sources/github/loongOpen__OpenLoong-Hardware/QingLoong V2.5/en/QingLoong V2.5 - 3D File/TA00-Assemblies of Modules - 3D File/TA00-Qinglong Humanoid Robot - Master Assembly.STEP"
+    },
+    {
+      "bytes": 633495784,
+      "key": "sources/github/Himalia13__42006-Technic-Model/Assembly/TOTAL/STL/TOTAL.stl"
+    },
+    {
+      "bytes": 633495784,
+      "key": "sources/github/Himalia13__42006-Lego-Model/Assembly/TOTAL/STL/TOTAL.stl"
+    },
+    {
+      "bytes": 602981334,
+      "key": "sources/github/Himalia13__42006-Technic-Model/Assembly/TOTAL/IGES/TOTAL.iges"
+    },
+    {
+      "bytes": 602981334,
+      "key": "sources/github/Himalia13__42006-Lego-Model/Assembly/TOTAL/IGES/TOTAL.iges"
+    },
+    {
+      "bytes": 602234862,
+      "key": "sources/github/Himalia13__42006-Technic-Model/Assembly/TOTAL/OBJ/TOTAL.obj"
+    },
+    {
+      "bytes": 602234862,
+      "key": "sources/github/Himalia13__42006-Lego-Model/Assembly/TOTAL/OBJ/TOTAL.obj"
+    },
+    {
+      "bytes": 589489281,
+      "key": "sources/github/Open-Lab-Starter-Kit__OLSK-Large-CNC__e7081c49c582/cad/Step/Large CNC V3.step.extracted/Large CNC V3.step"
+    },
+    {
+      "bytes": 520654540,
+      "key": "sources/github/menloresearch__asimov-1__55fca52b9f82/mechanical/ASV1/FullBodyAssembly/Asimov_1.STEP"
+    },
+    {
+      "bytes": 520654540,
+      "key": "sources/github/menloresearch__asimov-1/mechanical/ASV1/FullBodyAssembly/Asimov_1.STEP"
+    },
+    {
+      "bytes": 520654540,
+      "key": "sources/github/asimovinc__asimov-1/mechanical/ASV1/FullBodyAssembly/Asimov_1.STEP"
+    },
+    {
+      "bytes": 472136976,
+      "key": "sources/github/loongOpen__OpenLoong-Hardware/QingLoong V2.5/zh/\u9752\u9f99V2.5 - \u4e09\u7ef4\u6587\u6863/TA00-\u5404\u6a21\u5757\u88c5\u914d\u4f53-\u4e09\u7ef4\u56fe\u7eb8/TA00-04-00 \u80f8\u8154(\u6709\u5916\u58f3).STEP"
+    },
+    {
+      "bytes": 472136976,
+      "key": "sources/github/loongOpen__OpenLoong-Hardware/QingLoong V2.5/en/QingLoong V2.5 - 3D File/TA00-Assemblies of Modules - 3D File/TA00-04-00 Thoracic Section (Cased).STEP"
+    },
+    {
+      "bytes": 469098250,
+      "key": "sources/github/loongOpen__OpenLoong-Hardware/QingLoong V2.5/zh/\u9752\u9f99V2.5 - \u4e09\u7ef4\u6587\u6863/TA00-\u5404\u6a21\u5757\u88c5\u914d\u4f53-\u4e09\u7ef4\u56fe\u7eb8/TA00-12-00\u817f\u90e8\u7cfb\u7edf(\u6709\u5916\u58f3\u5168).STEP"
+    },
+    {
+      "bytes": 469098250,
+      "key": "sources/github/loongOpen__OpenLoong-Hardware/QingLoong V2.5/en/QingLoong V2.5 - 3D File/TA00-Assemblies of Modules - 3D File/TA00-12-00 Leg System (Fully Cased).STEP"
+    },
+    {
+      "bytes": 371278594,
+      "key": "sources/github/Open-Lab-Starter-Kit__OLSK-Small-CNC__cae066fa5b78/cad/step/Small CNC V3 ATC Update.step.extracted/Small CNC V3 ATC Update.step"
+    },
+    {
+      "bytes": 366666413,
+      "key": "sources/github/loongOpen__OpenLoong-Hardware/QingLoong V2.5/zh/\u9752\u9f99V2.5 - \u4e09\u7ef4\u6587\u6863/TA00-\u5404\u6a21\u5757\u88c5\u914d\u4f53-\u4e09\u7ef4\u56fe\u7eb8/TA00-12-00\u817f\u90e8\u7cfb\u7edf(\u65e0\u5916\u58f3).STEP"
+    },
+    {
+      "bytes": 366666413,
+      "key": "sources/github/loongOpen__OpenLoong-Hardware/QingLoong V2.5/en/QingLoong V2.5 - 3D File/TA00-Assemblies of Modules - 3D File/TA00-12-00 Leg System (Uncased).STEP"
+    },
+    {
+      "bytes": 366666413,
+      "key": "sources/existing/assembly-search/robots/TA00-12-00 Leg System (Uncased).STEP"
+    }
+  ]
+}
