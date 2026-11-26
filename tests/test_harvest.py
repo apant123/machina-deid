@@ -9,12 +9,12 @@ def kinds(h, prefix):
 def test_step_header_fields_and_escapes():
     step = (b"ISO-10303-21;\nHEADER;\nFILE_DESCRIPTION(('desc'),'2;1');\n"
             b"FILE_NAME('part.stp','2020-01-01T00:00:00',('Jane Doe'),('ACME Corp'),'pp','SolidWorks','');\n"
-            b"FILE_SCHEMA(('AP214'));\nENDSEC;\nDATA;\n#1=PRODUCT('Widget \\X2\\97529F99\\X0\\','x','',(#2));\n"
+            b"FILE_SCHEMA(('AP214'));\nENDSEC;\nDATA;\n#1=PRODUCT('Widget \\X2\\767D9E64\\X0\\','x','',(#2));\n"
             b"#2=CARTESIAN_POINT('',(0.,1.,2.));\nENDSEC;\nEND-ISO-10303-21;\n")
     h = harvest_bytes(step, "step")
     assert kinds(h, "step.file_name.author") == {"Jane Doe"}
     assert kinds(h, "step.file_name.org") == {"ACME Corp"}
-    assert "Widget 青龙" in kinds(h, "step.data")
+    assert "Widget 白鹤" in kinds(h, "step.data")
     assert step_decode(b"O''Brien") == "O'Brien"
 
 
@@ -37,15 +37,15 @@ def test_iges_global_author_org():
 def test_text_runs_utf16_and_cjk():
     h = Harvest()
     buf = (b"\x0e\x00" + "Century Gothic".encode("utf-16-le") + b"\x05\x01" + "江詠筑作业".encode("utf-16-le")
-           + b"\x00\x00\x9aC:\\Users\\vincent\\x\x00" + bytes(range(256)) * 4)
+           + b"\x00\x00\x9aC:\\Users\\quintor\\x\x00" + bytes(range(256)) * 4)
     text_runs(h, buf, "r")
     vals = {v for (_k, v) in h.strings}
-    assert {"Century Gothic", "江詠筑作业", "C:\\Users\\vincent\\x"} <= vals
+    assert {"Century Gothic", "江詠筑作业", "C:\\Users\\quintor\\x"} <= vals
 
 
 def test_plausible_rejects_noise():
     assert not plausible("x9$#")
-    assert plausible("ALBERTO PARMIGGIANI")
+    assert plausible("OTTAVIO QUARTAVELLI")
 
 
 def test_json_and_markup():

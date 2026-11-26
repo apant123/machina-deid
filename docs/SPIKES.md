@@ -1,5 +1,7 @@
 # Format spikes: native CAD rewrite feasibility
 
+> Names, handles and e-mails in the examples below are **synthetic stand-ins**. The real values stay only in the private data directory and staging bucket (`deid.code_leak_check` enforces this).
+
 Spike code lives in `spikes/`. Sample files are in `~/data/machina/spikes/`.
 We had no CAD application available, so every check here is structural:
 - the file re-parses
@@ -17,7 +19,7 @@ We had no CAD application available, so every check here is structural:
 
 **Identifying data found:**
 - usernames in `C:\Users\<name>\…` paths
-- `Header2` / `ModelHeader` user lists (`dlevin`, `jrousseau`, …)
+- `Header2` / `ModelHeader` user lists (`ktomas`, `pbellard`, …)
 - `docProps/core.xml` `lastModifiedBy`
 - `ReplaceRef` paths to referenced parts (Google Drive and OneDrive paths)
 - `Biography` (save history)
@@ -45,7 +47,7 @@ File size, offsets, compressed and uncompressed sizes all stay identical. Only C
 
 - **Stream-level same-length replacement** with `olefile.write_stream` worked on 11/11 samples:
   - stream list and sizes unchanged;
-  - property sets still parse (`last_saved_by: garthz → vymdcv`);
+  - property sets still parse (`last_saved_by: orvank → qelbrn`);
   - no names left in live streams.
 - **Leak 1: free and slack sectors.** The leftover names sat in **FREE big sectors and unallocated mini-stream space** (stale data from earlier saves). The writer must zero free sectors, free mini-sectors, and the tail slack of each stream.
 - **Leak 2: embedded zlib.** Old SolidWorks `*__ZLB` streams hold `[24-byte header incl. u32 compressed_len][zlib blob]`, and names appear inside the blobs. The same exact-size recompression works (3/3), keeping the length prefix and the Adler32 valid.
@@ -116,7 +118,7 @@ Final run (`python -m deid.unpack`, then `--retry-failed`):
 
 Findings:
 - **Corrupt-at-source gzip** (1990s NIST `.arc.gz`, CRC and length mismatch): raw-deflate recovery, `status=recovered`, so the contents are still de-identified.
-- **Encrypted archives** (7 zip blobs incl. `hardgate/*.zip`; 4 header-encrypted `virtualagc/.../*.7z`): quarantined. The contents can't be read, but the central-directory filenames are plaintext, so the output policy must decide whether to drop these files or rebuild them.
+- **Encrypted archives** (7 zip blobs incl. `hardgate/*.zip`; 4 header-encrypted `retroguide/.../*.7z`): quarantined. The contents can't be read, but the central-directory filenames are plaintext, so the output policy must decide whether to drop these files or rebuild them.
 
 ## eDrawings validation and the File 10 fix
 
@@ -138,10 +140,10 @@ The loader resolves classes by name, so the file failed to parse. The same bug a
 - **Hard guards.** MFC class names (`[a-z]{2}[A-Z]…_c`, ASCII and UTF-16) and XML tag and attribute *names* are never modified.
 - **Word boundaries.** A single letter-valued byte directly after binary is treated as a length prefix (e.g. `0x4A`='J'). A naive boundary test would leak names stored as `\x4Aname`.
 - **Generic-account stoplist**: User, Admin, Administrator, Owner, Guest, PC, Usuario, … These are never pseudonymised.
-- **Case-insensitive matching for ASCII keys**, with the matched case copied onto the pseudonym (`TRACEPARTS`, `AleX`).
+- **Case-insensitive matching for ASCII keys**, with the matched case copied onto the pseudonym (`PARTSVAULT`, `AleX`).
 - **Short keys (≤ 4 ASCII characters) are replaced only as whole strings**: 1-byte CString length = key length; MFC Unicode `FF FE FF <len>`; OLE `VT_LPSTR`/`VT_LPWSTR` (u32 length including NUL); or delimited text. This prevents corrupting random geometry bytes that happen to spell `rje`.
 - **Bug fixed:** UTF-16 matches at odd offsets were silently skipped. That is exactly where SolidWorks CStrings start, so names leaked.
-- **Bug fixed:** short names in OLE property sets (`Tony` as Last Saved By) were not recognised.
+- **Bug fixed:** short names in OLE property sets (`Pim` as Last Saved By) were not recognised.
 - **Longest key first.** CJK keys use substring matching (no word boundaries in CJK text).
 - **`residual()`** reports original names still present inside real text runs, ignoring binary noise, so a file can be flagged for review or quarantine.
 
@@ -152,14 +154,14 @@ The loader resolves classes by name, so the file failed to parse. The same bug a
 - 28,082 replacements (v1: 26,062; the difference is occurrences v1 missed);
 - 1 exact-size quarantine (unchanged);
 - 3 residual flags:
-  - `guilh` ⊂ `Guilherme_Grancho` + student ID: a real name. Needs Stage 2 prefix expansion and NER.
+  - `teodo` ⊂ `Teodorico_Vallemo` + student ID: a real name. Needs Stage 2 prefix expansion and NER.
   - `reprap` ⊂ server `\\SRVREPRAP\`: flagged correctly.
   - `RJE` in display-list binary: a benign false flag.
 
 **v2 bundle:** all 13 files rebuilt with `spikes/build_qa_bundle.py`; 13/13 verified; 0 residual flags.
 
 **Stage 2 items surfaced here:**
-- truncated 5-character Windows profile names (`hackm` → `hackmancoltaire`, `guilh` → `Guilherme_Grancho`);
-- organisation names inside paths (`UC Irvine`);
+- truncated 5-character Windows profile names (`quorv` → `quorvandelibast`, `teodo` → `Teodorico_Vallemo`);
+- organisation names inside paths (`UC Westfield`);
 - student or employee IDs used as folder names (`1103847`, `17075`);
-- one entity seen in several cases (`Ishan`/`ishan`) must map to one pseudonym (handled by case-insensitive matching).
+- one entity seen in several cases (`Ravik`/`ravik`) must map to one pseudonym (handled by case-insensitive matching).

@@ -64,3 +64,19 @@ The manifest outputs:
 .venv312/bin/python -m deid.harvest_run upload          # -> s3://…raw…/_harvest/
 ```
 `Xvfb` + ODA File Converter are needed for DWG (the runner starts a shared `Xvfb :99`). See [docs/STAGE1.md](docs/STAGE1.md) for the formats, the outputs and the results.
+
+## Stage 2: entity resolution → pseudonym map
+```bash
+.venv312/bin/python -m deid.ner_run input               # unique human-text strings, digit-templated
+.venv312/bin/python -m deid.ner_run pieces              # prefilter (proper-noun token / CJK / @) + split ≤120 chars
+NER_THREADS=2 .venv312/bin/python -m deid.ner_run run --workers 7   # GLiNER multi, local CPU, resumable
+.venv312/bin/python -m deid.entities build              # owners + fields + regex + vendors + NER -> map_candidates
+.venv312/bin/python -m deid.entity_scan run --workers 6 # corpus hit counts (Aho-Corasick) -> map.parquet
+.venv312/bin/python -m deid.spotcheck                   # -> ~/data/machina/entities/spotcheck.md (contains PII)
+.venv312/bin/python -m pytest -q tests/
+```
+Policy lists (tools kept, vendors replaced, generic accounts, infrastructure domains) live in
+`config/entity_policy.yaml`. The seed (`DEID_SEED`) is in `.env`, and the map itself is PII. Neither goes to
+the code bucket. See [docs/STAGE2.md](docs/STAGE2.md).
+
+Before uploading code or docs anywhere: `python -m deid.code_leak_check` must print `no leaks`. It scans the repo for every distinctive original name in the map, and for their pseudonyms. The vendor gazetteer, the reviewer seeds and the probes live in `<DATA_DIR>/entities/` (private). `r2_audit.json` is never shipped.

@@ -170,7 +170,7 @@ print(f"\n=== TOP 10 LARGEST FILES ===")
 for s, k in largest_files[:10]:
     print(f"  {s/MB:8.1f} MB  {k}")
 
-# Save full report for Claude Code / documentation
+# Save full report for documentation
 report = {
     "total_objs": total_objs,
     "total_bytes": total_bytes,

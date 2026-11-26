@@ -1,0 +1,470 @@
+# Stage 2 entity policy. PUBLIC, non-PII lists only (no harvested names live in code).
+# Decision (user, 2026-11-26): keep CAD tool / software names (they describe the file format, not
+# the author); replace part-catalogue, supplier and vendor names (consistently, like any org).
+
+# --- kept: CAD / software tools and their makers (as they appear in tool stamps) -------------
+keep_tools:
+  - OpenCV
+  - RepRap   # open-source printer project (also seen as an account name)
+  - SolidWorks
+  - Dassault
+  - Dassault Syst   # 'Dassault Systèmes' cut at a mis-decoded è
+  - ACAD           # AutoCAD's internal name
+  - 百度翻译       # Baidu Translate (software, seen as an author value)
+  - SolidWorks Corp
+  - SOLIDWORKS
+  - Dassault Systemes
+  - Dassault Systèmes
+  - 3DEXPERIENCE
+  - CATIA
+  - eDrawings
+  - Autodesk
+  - AutoCAD
+  - Inventor
+  - Fusion 360
+  - Fusion
+  - Eagle
+  - HSMWorks
+  - Netfabb
+  - FreeCAD
+  - Open CASCADE
+  - OpenCASCADE
+  - OCCT
+  - OCC
+  - OpenSCAD
+  - CadQuery
+  - build123d
+  - KiCad
+  - kicad StepUp
+  - StepUp
+  - ksu
+  - ksu MCAD
+  - Altium
+  - Altium Designer
+  - Creo
+  - Pro/ENGINEER
+  - PTC
+  - Parametric Technology
+  - Siemens NX
+  - NX
+  - Unigraphics
+  - UGS
+  - Solid Edge
+  - Parasolid
+  - Siemens PLM
+  - Siemens Industry Software
+  - ACIS
+  - SPATIAL CORP
+  - Spatial
+  - Spatial Corp
+  - HOOPS
+  - Tech Soft 3D
+  - ODA
+  - Open Design Alliance
+  - Teigha
+  - Onshape
+  - Rhino
+  - Rhinoceros
+  - McNeel
+  - Grasshopper
+  - Blender
+  - SketchUp
+  - Trimble
+  - ZWCAD
+  - ZWCAD Software Co.
+  - ZWSOFT
+  - GstarCAD
+  - BricsCAD
+  - DraftSight
+  - LibreCAD
+  - QCAD
+  - Inkscape
+  - GIMP
+  - Sodipodi
+  - Adobe
+  - Adobe Acrobat
+  - Acrobat Distiller
+  - Illustrator
+  - Photoshop
+  - Microsoft
+  - Microsoft Word
+  - Microsoft Excel
+  - Microsoft Office
+  - PowerPoint
+  - Visio
+  - LibreOffice
+  - OpenOffice
+  - Ghostscript
+  - PScript5
+  - PScript5.dll
+  - cairo
+  - Matplotlib
+  - MATLAB
+  - Mathcad
+  - ANSYS
+  - Abaqus
+  - COMSOL
+  - Nastran
+  - Cura
+  - Cura
+  - PrusaSlicer
+  - Slic3r
+  - Simplify3D
+  - Bambu Studio
+  - OrcaSlicer
+  - MeshLab
+  - 3D Builder
+  - Meshmixer
+  - LEAD Technologies
+  - Pixel Translations
+  - iText
+  - PDFlib
+  - pdfTeX
+  - TCPDF
+  - Qt
+  - Skia
+  - FrontPage
+  - JFIF
+  - Exif
+  - CIMCO
+  - Universal G-Code Sender
+  - GRBL
+  - Marlin
+  - Klipper
+  - Arduino IDE
+  - VCad
+  - vcad
+  - Shapr3D
+  - IronCAD
+  - SpaceClaim
+  - TurboCAD
+  - DesignSpark
+  - EasyEDA
+  - Fritzing
+  - CAMWorks
+  - Mastercam
+  - SolidCAM
+  - Geometry Gym
+  - Toolbox
+  - SolidWorks Toolbox
+  - SDRC
+  - I-DEAS
+  - Mozilla
+
+# --- kept: standards, licences, generic engineering / document vocabulary -------------------
+keep_terms:
+  - ISO
+  - DIN
+  - ANSI
+  - ASME
+  - ASTM
+  - IEC
+  - IEEE
+  - JEDEC
+  - IPC
+  - NEMA
+  - SAE
+  - JIS
+  - GB
+  - EN
+  - UL
+  - CE
+  - RoHS
+  - AISI
+  - UNS
+  - Creative Commons
+  - CC-BY
+  - CC BY-SA
+  - CERN OHL
+  - CERN-OHL
+  - GNU
+  - GPL
+  - MIT License
+  - Apache
+  - Apache License
+  - Wikipedia
+  - OpenStreetMap
+  - Natural Earth
+  - GitHub
+  - GitLab
+  - Google
+  - YouTube
+  - Dropbox
+  - Thingiverse
+  - Printables
+  - Instructables
+  - STEP
+  - IGES
+  - Unicode
+  - Windows
+  - Linux
+  - Mac
+  - macOS
+  - Python
+  - Java
+  - Phillips  # screw drive type
+  - Torx
+  - Allen
+  - Helicoil
+  - Nyloc
+  - Bowden
+  - Delrin
+  - Teflon
+  - Kevlar
+  - Lycra
+  - Velcro
+  - Plexiglas
+  - Nema
+  - Nema17
+  - NEMA 17
+  - NEMA17
+  - Gerber
+  - Excellon
+  - Arduino Uno  # board form factor / pinout standard, kept as a phrase
+  - Uno
+  - CERN
+  - Pantone
+  - PANTONE
+  - RAL
+  - STL
+  - DXF
+  - DWG
+  - PDF
+  - SVG
+  - OBJ
+  - VRML
+  - XML
+  - HTML
+  - Segoe UI
+  - Arial
+  - Arial Unicode MS
+  - Helvetica
+  - Calibri
+  - Cambria
+  - Times New Roman
+  - Verdana
+  - Tahoma
+  - Courier New
+  - Consolas
+  - ISOCPEUR
+  - ISOCP
+  - osifont
+  - DejaVu Sans
+  - Liberation Sans
+  - Noto Sans
+  - Roboto
+  - Open Sans
+  - Century Gothic
+  - Franklin Gothic
+  - Lucida
+  - Symbol
+  - Wingdings
+  - SimSun
+  - SimHei
+  - Microsoft YaHei
+  - MS Gothic
+  - MS Mincho
+
+# --- kept: URL hosts that are infrastructure / standards / tools (exact host or suffix) -----
+keep_domains:
+  - schemas.openxmlformats.org
+  - purl.org
+  - w3.org
+  - adobe.com
+  - solidworks.com
+  - 3ds.com
+  - autodesk.com
+  - freecadweb.org
+  - freecad.org
+  - inkscape.org
+  - sourceforge.net
+  - wikipedia.org
+  - wikimedia.org
+  - microsoft.com
+  - office.com
+  - creativecommons.org
+  - spatial.com
+  - matplotlib.org
+  - digicert.com
+  - comodoca.com
+  - usertrust.com
+  - gnu.org
+  - doi.org
+  - crossref.org
+  - orcid.org
+  - arxiv.org
+  - acm.org
+  - apache.org
+  - github.com
+  - github.io
+  - githubusercontent.com
+  - gitlab.com
+  - google.com
+  - youtube.com
+  - youtu.be
+  - openstreetmap.org
+  - naturalearthdata.com
+  - cairographics.org
+  - openoffice.org
+  - xmlsoap.org
+  - iptc.org
+  - useplus.org
+  - npes.org
+  - aiim.org
+  - cipa.jp
+  - unity3d.com
+  - apple.com
+  - java.com
+  - ibiblio.org
+  - fontawesome.com
+  - mcneel.com
+  - rhino3d.com
+  - food4rhino.com
+  - slic3r.org
+  - tcpdf.org
+  - pdf-tools.com
+  - day.com
+  - europa.eu
+  - iec.ch
+  - jedec.org
+  - cern.ch
+  - ohwr.org
+  - reprap.org
+  - kivy.org
+  - mbed.org
+  - bit.ly
+  - amzn.to
+  - amazonaws.com
+  - cloudfront.net
+  - dropbox.com
+  - notion.so
+  - thingiverse.com
+  - instructables.com
+  - mediafire.com
+  - sharepoint.com  # the tenant label in front (e.g. htlstp-my) is replaced separately
+  - techsmith.com
+  - primopdf.com
+  - ilovepdf.com
+  - sejda.org
+  - geometrygym.com
+  - cimco-software.com
+  - hsmworks.com
+  - netfabb.com
+  - onshape.com
+  - ptc.com
+  - siemens.com
+  - plm.automation.siemens.com
+  - opencascade.com
+  - opencascade.org
+  - kicad.org
+  - kicad-pcb.org
+  - python.org
+  - eclipse.org
+  - mozilla.org
+  - w3c.org
+  - example.com
+
+# Webmail / generic mail providers: the local part is an entity, the domain is kept.
+generic_mail_domains:
+  - gmail.com
+  - googlemail.com
+  - outlook.com
+  - hotmail.com
+  - live.com
+  - msn.com
+  - yahoo.com
+  - yahoo.co.uk
+  - yahoo.fr
+  - icloud.com
+  - me.com
+  - mac.com
+  - aol.com
+  - gmx.de
+  - gmx.net
+  - gmx.com
+  - web.de
+  - qq.com
+  - 163.com
+  - 126.com
+  - sina.com
+  - foxmail.com
+  - yandex.ru
+  - mail.ru
+  - protonmail.com
+  - proton.me
+  - zoho.com
+
+# Account names that identify nobody (extends deid.replace.GENERIC_ACCOUNTS).
+generic_accounts:
+  - Workstation
+  - Author
+  - support
+  - Support
+  - admin
+  - Admin
+  - user
+  - User
+  - test
+  - Test
+  - guest
+  - Guest
+  - student
+  - Student
+  - Operator
+  - Title
+  - NONE
+  - None
+  - Unknown
+  - unknown
+  - Utilisateur
+  - Usuario
+  - TEMP
+  - Temp
+  - Public
+  - All Users
+  - Default User
+  - Owner
+  - Software
+  - Desc
+  - desc
+  - PhotonUser
+  - ec2-user
+  - runner
+  - vagrant
+  - jenkins
+  - builder
+  - build
+  - docker
+  - pi
+  - ADMINI~1
+  - TEMPDS~1.011
+  - "@mod_time"
+  - JFIF
+  - Exif
+  - 8BIM
+  - ICC_PROFILE
+  - XYZ
+  - space
+  - HOME
+  - CAD
+  - Name
+  - 微软用户   # "Microsoft user" (default zh Windows account)
+  - 微软中国   # "Microsoft China" (default org)
+  - 您的姓名   # "your name" placeholder
+  - 用户
+  - 作者     # "author"
+  - 管理员   # "administrator"
+  - 姓名     # "name"
+  - 设计     # "design"
+  - 审核     # "review"
+  - 未知     # "unknown"
+  - 匿名     # "anonymous"
+  - China
+  - Managed by Terraform
+
+# --- replaced: part catalogues, suppliers, component vendors (gazetteer to boost recall) -----
+# NER finds most of these anyway; listing them makes recall deterministic.
+# --- replaced: part catalogues, suppliers, component vendors --------------------------------
+# The gazetteer (public vendor names, all of which are REPLACED) is read from
+# <DATA_DIR>/entities/vendors.yaml, next to the map: shipping it here would list names
+# that the de-identified output no longer contains.

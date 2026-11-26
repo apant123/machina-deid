@@ -12,8 +12,8 @@ Creo, text formats). Lessons from the eDrawings test (File 10 failure):
   sitting directly after non-printable bytes is therefore treated as a prefix.
 * MFC class names (`[a-z]{2}[A-Z]..._c`) and XML tag/attribute *names* are never
   touched, whatever the mapping says.
-* Longest key first, so `hackmancoltaire` wins over its truncated profile-folder
-  form `hackm`.
+* Longest key first, so `quorvandelibast` wins over its truncated profile-folder
+  form `quorv`.
 * CJK (non-ASCII-edged) keys have no word boundaries: plain substring match.
 * Replacements are same-byte-length per encoding (binary formats are
   length-coupled); a key whose pseudonym differs in length in an encoding is not
@@ -78,7 +78,7 @@ class Stats:
 
 
 def _case_variants(k: str, v: str) -> list[tuple[str, str]]:
-    """k->v plus UPPER / lower / Title forms (e.g. TraceParts -> TRACEPARTS also seen)."""
+    """k->v plus UPPER / lower / Title forms (e.g. PartsVault -> PARTSVAULT also seen)."""
     out = [(k, v)]
     for f in (str.upper, str.lower, str.title):
         fk, fv = f(k), f(v)

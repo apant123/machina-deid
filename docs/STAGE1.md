@@ -1,5 +1,7 @@
 # Stage 1: string harvest
 
+> Names, handles and e-mails in the examples below are **synthetic stand-ins**. The real values stay only in the private data directory and staging bucket (`deid.code_leak_check` enforces this).
+
 **Goal:** every string in the corpus that *could* name a person, company or brand, recorded with
 where it came from (format and field) and how often it occurs. Nothing is decided here; Stage 2
 classifies the strings and builds the pseudonym map.
@@ -76,27 +78,27 @@ In `~/data/machina/harvest/`, also uploaded to `s3://machina-deid-raw-arav-06537
 ### Recall probes (entities known from Stage 0 and the spikes)
 | Entity | Distinct values containing it | Blob hits |
 |---|---|---|
-| `hackmancoltaire` | 54 | 2,419 |
-| `ALBERTO PARMIGGIANI` | 26 | 4,561 |
-| `pcorreia` | 5 | 11,278 |
-| `TraceParts` | 141 | 1,440 |
-| `Guilherme_Grancho` | 93 | 287 |
-| `CRANE-X7` | 110 | 221 |
-| `albertpan98@qq.com` | 1 | 73 |
-| `MSI\alexa (MSI)` | 1 | 97 |
-| `青龙` | 9 | 10 |
-| `usnistgov`, `loongOpen`, `QingLoong`, `Himalia13` | path components only (`paths.parquet`) | |
+| `quorvandelibast` | 54 | 2,419 |
+| `OTTAVIO QUARTAVELLI` | 26 | 4,561 |
+| `jfalkenr` | 5 | 11,278 |
+| `PartsVault` | 141 | 1,440 |
+| `Teodorico_Vallemo` | 93 | 287 |
+| `HERON-Z5` | 110 | 221 |
+| `<user>@qq.com` (STEP author e-mail) | 1 | 73 |
+| `MSI\wrenna (MSI)` | 1 | 97 |
+| `白鹤` | 9 | 10 |
+| `usxyzgov`, `heronOpen`, `BaiHeBot`, `Kestrelix13` | path components only (`paths.parquet`) | |
 
 ### High-signal fields (examples; the most frequent value per field)
 - `step.file_name.author` / `org`:
-  - generic: `Author`, `Open CASCADE`, `step.parts`;
-  - names: `Rene Poeschl`, `poeschlr@gmail.com`, `ZWCAD Software Co.`.
-- `iges.global.author`: `dmgaines`, `Jeff Hudgens`, `Steve`.
-- `ole.meta.author` / `last_saved_by`: `LECOMTE`, `Garth Zeglin, 412-268-5909, garthz@cmu.edu`, `McMaster-Carr Supply Company`, `黄海生`, `Guille`, `epallares`, `Tony`.
-- `pdf.meta.author`: `3DAssist-PC\3DAssist`, `EPALLARES\epallares`, `MSI\alexa`, `WIN\mbokj`.
-- SolidWorks properties: `hackmancoltaire` (2,299 files), `SixWingedFreak`, `Magnus Bolt Kjer` / `DTU`, `CADENAS GmbH`.
-- FreeCAD `CreatedBy`: `Simone Bignetti`, `Anthony W. Hursh`, `Jesus Ignacio Fernandez`.
-- Parasolid header: `USER=brown` / `kramer` / `regli`, `SITE=sdl-cambridge-u.k.`.
+  - generic: `Author`, `Open CASCADE`, a parts-catalogue site;
+  - names: `Mira Talvenk`, `talvenkm@gmail.com`, `ZWCAD Software Co.`.
+- `iges.global.author`: `tkellarq`, `Rolf Ambery`, `Ned`.
+- `ole.meta.author` / `last_saved_by`: `DUVERNE`, `Orvan Kestro, 555-010-0199, orvank@kzu.edu`, `Acme Fastener Supply Company`, `周某某`, `Marce`, `rquintal`, `Pim`.
+- `pdf.meta.author`: `CADBENCH-PC\cadbench`, `RQUINTAL\rquintal`, `MSI\wrenna`, `WIN\tfulq`.
+- SolidWorks properties: `quorvandelibast` (2,299 files), `TenHornedMoose`, `Torvald Brix Nedder` / `XKU`, `Catalogix GmbH`.
+- FreeCAD `CreatedBy`: `Ilaria Montecroce`, `Desmond K. Farrow`, `Mateo Ruiz Quintanar`.
+- Parasolid header: `USER=jdoe` / `mroe` / `tpark`, `SITE=lab-example-u.k.`.
 
 ### OCR pass (`deid/ocr_run.py`, RapidOCR PP-OCRv6 on ONNX, CPU, Chinese + Latin)
 - **Targets:** 5,088 files:
@@ -107,12 +109,12 @@ In `~/data/machina/harvest/`, also uploaded to `s3://machina-deid-raw-arav-06537
 - **Time:** 15.2 CPU-hours, about 80 minutes wall-clock.
   - The first run oversubscribed the CPUs (load 43 on 16 vCPU), because OpenCV's thread pool ignores the ONNX thread setting. It was fixed with `cv2.setNumThreads(1)`.
 - **Output:** 152 k occurrences, of which **81 k values are not found anywhere in the text harvest**. Examples, mostly logos and raster title blocks:
-  - `Universidad Carlos III de Madrid` (127 files)
+  - `Universidad Valdemoro IV de Alcantra` (127 files)
   - `ETH zürich` (117)
-  - `Howard Hughes Medical Institute` / `janelia` (71)
-  - `CC-BY 4.0, Philippe COLBACH, 2024` (69)
+  - a medical research institute and its campus name (71)
+  - `CC-BY 4.0, Lucien VARGANT, 2024` (69)
   - `BARCELONATECH`
-  - `HTL ST. PÖLTEN`
+  - `HTL <TOWN>`
   - `PRECICU`
 
   Text-layer harvesting alone would have missed them.
@@ -126,4 +128,4 @@ In `~/data/machina/harvest/`, also uploaded to `s3://machina-deid-raw-arav-06537
    - CAD thumbnails are not OCR'd. Stage 3 neutralises them in length-sensitive formats and scrubs them in re-encodable ones.
    - OCR covers standalone images, scanned PDF pages (2,523) and PDF-embedded images.
 3. **Generic accounts:** `User`, `Administrator`, `Admin`, `Operator`, `ubuntu`, `Author`, `Unknown`, `NONE` dominate the field values. They are covered by `GENERIC_ACCOUNTS` in `deid/replace.py`, to be extended in Stage 2 with `Operator`, `Author`, `Title` and `NONE`.
-4. **Tool and vendor strings** (`Open CASCADE`, `SOLIDWORKS 2018 SP4.0`, `PScript5.dll`, `CADENAS GmbH`, `TraceParts`, `McMaster-Carr`): Stage 2 must decide whether they are identifying. The plan's assumption is that CAD-tool brands are kept and content-provider / vendor names are replaced. This needs your confirmation before Stage 2.
+4. **Tool and vendor strings** (`Open CASCADE`, `SOLIDWORKS 2018 SP4.0`, `PScript5.dll`, `Catalogix GmbH`, `PartsVault`, `Acme-Fastener`): Stage 2 must decide whether they are identifying. The plan's assumption is that CAD-tool brands are kept and content-provider / vendor names are replaced. This needs your confirmation before Stage 2.
