@@ -34,8 +34,15 @@ GENERIC_ACCOUNTS = {
 
 _WORD = frozenset(b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
 _PRINTABLE = frozenset(range(0x20, 0x7F))
+_TEXTISH = _PRINTABLE | {9, 10, 13}
 _CLASS_TOKEN = re.compile(rb"[a-z]{2}[A-Z][A-Za-z0-9]*_c(?![A-Za-z0-9_])")
 _CLASS_TOKEN16 = re.compile(rb"(?:[a-z]\x00){2}[A-Z]\x00(?:[A-Za-z0-9]\x00)*_\x00c\x00")
+# CAD format vocabulary that must never be rewritten, even where a published map row matches it: AutoCAD
+# dictionary / class names (ACAD_*, Acad*), Solid Edge / ACIS names, SolidWorks system property
+# names ('SW-<property>' in any language: drawings and BOMs link to them by name)
+_STRUCT_TOKEN = re.compile(rb"(?<![A-Za-z0-9_])(?:ACAD[_ ][A-Za-z_]{2,}|Acad(?:Dim)?[_ ]?[A-Za-z]{2,4}(?![A-Za-z])|"
+                           rb"[A-Z]{2,}ANNOT_GROUP|ACIS_[A-Z]{2,}|SW-[^\x00-\x1f\"'<>=:\\/|$]{2,48}?(?=[\x00-\x1f\"'<>=:|]|$))")
+_STRUCT_TOKEN16 = re.compile(rb"A\x00C\x00A\x00D\x00[_ ]\x00(?:[A-Za-z_]\x00){2,}|S\x00W\x00-\x00(?:(?!\x00\x00)[\s\S]{2}){2,48}")
 
 
 def is_generic_account(name: str) -> bool:
@@ -93,6 +100,40 @@ RESIDUAL_OVERLAP = 1024    # longer than any key, so a hit on a window edge is s
 SHORT_KEY = 4  # keys this short are only replaced as a whole, delimited string (never in binary noise)
 _SEP = frozenset(b" \\/\"'<>:;,=_-.()[]{}|@\t\r\n")
 _VALSEP = frozenset(b"\"'<>\x00\r\n\t=|;,()[]{}")  # ends of a whole field value (not space / - / _ / .)
+_VALPAIRS = frozenset({(34, 34), (39, 39), (40, 41), (62, 60)})  # "..", '..', (..), >..<
+
+
+# typographic delimiters (UTF-8 and cp1252): curly quotes / apostrophes, en/em dash, ellipsis, (R) (C) TM signs
+_U8_SEP = (b"\xe2\x80\x98", b"\xe2\x80\x99", b"\xe2\x80\x9c", b"\xe2\x80\x9d", b"\xe2\x80\x93", b"\xe2\x80\x94",
+           b"\xe2\x80\xa6", b"\xc2\xae", b"\xc2\xa9", b"\xe2\x84\xa2", b"\xc2\xab", b"\xc2\xbb")
+_CP1252_SEP = frozenset(b"\x91\x92\x93\x94\x96\x97\x85\xae\xa9\x99\xab\xbb")
+
+
+# UTF-8 only: single cp1252 bytes (0x91-0x99, 0xAE ...) are common inside binary payloads, and treating them as
+# delimiters let a short key match inside SolidWorks tessellation data (caught by the section verifier)
+def _usep_after(data: bytes, e: int) -> bool:
+    return any(data.startswith(u, e) for u in _U8_SEP)
+
+
+def _usep_before(data: bytes, s: int) -> bool:
+    return any(s >= len(u) and data[s - len(u):s] == u for u in _U8_SEP)
+
+
+def _printable_run(data: bytes, s: int) -> int:
+    """Length of the run of printable ASCII bytes starting at s."""
+    i = s
+    while i < len(data) and data[i] in _PRINTABLE:
+        i += 1
+    return i - s
+
+
+def _printable_word_run(data: bytes, s: int, e: int) -> bool:
+    """Text around the match (ignoring the typographic delimiter bytes) is printable: prose, not binary noise."""
+    a, b = data[max(0, s - 8):s], data[e:e + 8]
+    for u in _U8_SEP:
+        a, b = a.replace(u, b""), b.replace(u, b"")
+    rest = bytes(c for c in a + b if c not in _CP1252_SEP)
+    return not rest or sum(c in _PRINTABLE for c in rest) >= len(rest) - 1
 
 
 class Replacer:
@@ -119,6 +160,12 @@ class Replacer:
             for ck, cv in ([(k, v)] if k.isascii() else _case_variants(k, v)):
                 self.mapping.setdefault(ck, cv)
         self.originals = base
+        # short ASCII keys: the exact casings their map surfaces use (an org token like 'iCub' keeps its own
+        # mixed case; 'IiT' / 'eJ' inside binary noise is not a name)
+        self._short_shapes: dict[str, set[str]] = {}
+        for k in base:
+            if k.isascii() and len(k) <= SHORT_KEY:
+                self._short_shapes.setdefault(k.lower(), set()).add(k)
         self._length_mismatch: set[tuple[str, str]] = set()
         payload: dict[tuple[bool, bytes], list] = {}
         for k, v in self.mapping.items():
@@ -155,6 +202,10 @@ class Replacer:
         # long keys with a non-letter inside (Q.R.VELLMOR, Quorvex Bt, XQZ3DSigma): one hard edge is enough
         self._distinctive = {kk for (ci, kk) in payload if ci and len(kk.replace(b"\x00", b"")) >= 8 and
                              any(not (65 <= c <= 90 or 97 <= c <= 122) for c in kk.replace(b"\x00", b""))}
+        # 5-7 char letter+digit codes ('ZRB3D'): one hard edge is enough when the other side runs into a
+        # lower-case word ('D:\\ZRB3Dlabs\\'), never into more capitals ('ZRB3DRS' is a different code)
+        self._mixed_codes = {kk for (ci, kk) in payload if ci and 5 <= len(kk.replace(b"\x00", b"")) < 8 and
+                             any(48 <= c <= 57 for c in kk) and sum(65 <= c <= 90 or 97 <= c <= 122 for c in kk) >= 2}
 
     @staticmethod
     def _transfer_case(matched: bytes, value: bytes) -> bytes:
@@ -187,10 +238,40 @@ class Replacer:
             return True  # OLE property set VT_LPSTR: u32 length (incl. NUL) + text + NUL
         if after is not None and after in b" _-.\\/" and (
                 s >= 4 and n + 1 < int.from_bytes(data[s - 4:s], "little") < 4096 or
-                before is not None and n < before < 128 and (s < 2 or data[s - 2] not in _PRINTABLE)):
-            return True  # first word of a length-prefixed string (Zorb_TK_04..., ZORB 2x4 Block)
-        return (before is None or before in _SEP) and (after is None or after in _SEP) and \
-            self._printable_neighbourhood(data, s, e)
+                before is not None and n < before < 128 and (s < 2 or data[s - 2] not in _PRINTABLE) and
+                before in (_printable_run(data, s), _printable_run(data, s) + 1)):
+            # first word of a length-prefixed string (Zorb_TK_04..., ZORB 2x4 Block). The 1-byte prefix must equal
+            # the length of the text it prefixes: any letter after a NUL looks like a "length" ('\x00hinge' made
+            # a 4-letter name match inside the word)
+            return True
+        ub, ua = _usep_before(data, s), _usep_after(data, e)
+        return (before is None or before in _SEP or ub) and (after is None or after in _SEP or ua) and \
+            (self._printable_neighbourhood(data, s, e) or (ub or ua) and _printable_word_run(data, s, e))
+
+    def _short_shape_ok(self, data: bytes, s: int, e: int, unit: int, ci: bool) -> bool:
+        """A short key matched case-insensitively must look like a token: UPPER, lower, Title, or the exact
+        casing of one of its map surfaces. Mixed-case runs ('IiT', 'tK') are binary noise, not names."""
+        if not ci:
+            return True
+        m = data[s:e:unit]
+        try:
+            t = m.decode("ascii")
+        except UnicodeDecodeError:
+            return False
+        letters = [c for c in t if c.isalpha()]
+        if not letters:
+            return True
+        w = "".join(letters)
+        if w.isupper() or w.islower() or w[0].isupper() and w[1:].islower():
+            return True
+        if t in self._short_shapes.get(t.lower(), ()):
+            return True
+        # any other casing only between strong separators ('E:\\WorkSW_AleX\\'), never next to the brackets /
+        # symbols of binary noise ('{IiT[bB', 'G[eJ')
+        strong = b" \\/\"'\x00\t\r\n_-."
+        before = data[s - unit] if s - unit >= 0 else None
+        after = data[e] if e < len(data) else None
+        return (before is None or before in strong) and (after is None or after in strong)
 
     @staticmethod
     def _printable_neighbourhood(data: bytes, s: int, e: int) -> bool:
@@ -284,9 +365,27 @@ class Replacer:
             return s >= 2 and data[s - 2:s] in (b"\\\x00", b"/\x00") and data[e:e + 2] in (b"\\\x00", b"/\x00")
         return s >= 1 and data[s - 1] in b"\\/" and e < len(data) and data[e] in b"\\/"
 
-    def _whole_value(self, data: bytes, s: int, e: int, unit: int) -> bool:
+    def _whole_value(self, data: bytes, s: int, e: int, unit: int, strict: bool = False) -> bool:
         """The complete value of a field: delimited by quotes / XML text / NUL / line ends, or a length-prefixed
-        string (CString, OLE VT_LPSTR / VT_LPWSTR, MFC Unicode)."""
+        string (CString, OLE VT_LPSTR / VT_LPWSTR, MFC Unicode).
+
+        strict (short keys): the delimiters must be a matching pair ("..", '..', (..), >..<, NUL / line ends):
+        three bytes between any two delimiters ('<ROb;' in packed floats) are geometry, not an author field."""
+        if strict:
+            before = data[s - unit] if s - unit >= 0 else None
+            after = data[e] if e < len(data) else None
+            if unit == 2 and (s - 1 >= 0 and data[s - 1] != 0 or e + 1 < len(data) and data[e + 1] != 0):
+                before = after = -1
+            ends = (None, 0, 10, 13, 9)
+            paired = before in ends and after in ends or (before, after) in _VALPAIRS
+            n = (e - s) // unit
+            prefixed = unit == 1 and s >= 1 and data[s - 1] == n and (after is None or after == 0) or \
+                s >= 4 and int.from_bytes(data[s - 4:s], "little") in (n, n + 1) or \
+                unit == 2 and s >= 4 and data[s - 4:s - 1] == b"\xff\xfe\xff" and data[s - 1] == n  # MFC CString
+            if paired or prefixed:
+                return True
+            if not self._printable_ctx(data, s, e, unit):
+                return False  # loose delimiters next to binary bytes: packed numbers, not a field
         if unit == 2:
             nch = (e - s) // 2
             if s >= 4 and (data[s - 4:s - 1] == b"\xff\xfe\xff" and data[s - 1] == nch or
@@ -302,6 +401,15 @@ class Replacer:
         if before == n or before == n + 2 and after == 0 or s >= 4 and int.from_bytes(data[s - 4:s], "little") in (n, n + 1):
             return after is None or after not in _PRINTABLE or after in _VALSEP  # length-prefixed
         return (before is None or before in _VALSEP) and (after is None or after in _VALSEP)
+
+    @staticmethod
+    def _printable_ctx(data: bytes, s: int, e: int, unit: int, w: int = 8) -> bool:
+        """The match and w characters on each side are printable text (8-bit or UTF-16LE)."""
+        a, b = max(0, s - w * unit), min(len(data), e + w * unit)
+        if unit == 1:
+            return all(c in _TEXTISH for c in data[a:b])
+        a -= (a - s) % 2
+        return all(data[i] in _TEXTISH and data[i + 1] == 0 for i in range(a, b - 1, 2))
 
     # ---- boundary logic -------------------------------------------------
     @staticmethod
@@ -340,8 +448,10 @@ class Replacer:
         k = e
         while k < len(data) and (data[k] in _WORD or data[k] in b"_-.:"):
             k += 1
+        lt = j if j >= 0 and data[j] == ord("<") else j - 1   # position of the '<' of '<Name' / '</Name'
+        glued = lt >= 1 and data[lt - 1] in _WORD             # 'X8<NAME>' in a binary record: not markup
         if j >= 0 and data[j] in b"</" and (j == 0 or data[j] == ord("<") or data[j - 1] == ord("<")) and \
-                (k == len(data) or data[k] in b" \t\r\n>/"):
+                not glued and (k == len(data) or data[k] in b" \t\r\n>/"):
             return True  # <Name ...> or </Name>  (not '<NAME_01.ASM\x00' in a binary record)
         return data[k:k + 2] == b'="' or data[k:k + 2] == b"='"  # attrName="..."
 
@@ -366,7 +476,8 @@ class Replacer:
         cands = self._candidates(data)
         if not cands:
             return data, st
-        protected = [m.span() for m in _CLASS_TOKEN.finditer(data)] + [m.span() for m in _CLASS_TOKEN16.finditer(data)]
+        protected = [m.span() for m in _CLASS_TOKEN.finditer(data)] + [m.span() for m in _CLASS_TOKEN16.finditer(data)] + \
+            [m.span() for m in _STRUCT_TOKEN.finditer(data)] + [m.span() for m in _STRUCT_TOKEN16.finditer(data)]
         protected.sort()
         import bisect
         pstarts = [p[0] for p in protected]
@@ -383,12 +494,17 @@ class Replacer:
             if self.mode == "component":
                 ok = self._component(data, s, e, unit)
             elif self.mode == "whole":
-                ok = self._component(data, s, e, unit) or self._whole_value(data, s, e, unit)
+                if self._nchars.get(key, 99) <= SHORT_KEY:
+                    ok = self._short_shape_ok(data, s, e, unit, ci) and \
+                        (self._component(data, s, e, unit) or self._whole_value(data, s, e, unit, strict=True))
+                else:
+                    ok = self._component(data, s, e, unit) or self._whole_value(data, s, e, unit)
             elif self._nchars.get(key, 99) <= SHORT_KEY:
-                ok = self._whole_string16(data, s, e) if unit == 2 else self._whole_string8(data, s, e)
-                if not ok:  # 'ZORB3_006_G_002': short name + up to 3 digits + separator, hard start
+                ok = self._short_shape_ok(data, s, e, unit, ci) and \
+                    (self._whole_string16(data, s, e) if unit == 2 else self._whole_string8(data, s, e))
+                if not ok and self._short_shape_ok(data, s, e, unit, ci):  # 'ZORB3_006_G_002': + digits + sep
                     ok = self._digit_suffix(data, s, e, unit)
-                if not ok:  # 'ZORB_LOGO'
+                if not ok and self._short_shape_ok(data, s, e, unit, ci):  # 'ZORB_LOGO'
                     ok = self._affix(data, s, e, unit, key)
             elif bounded:
                 ok = (self._start_ok16(data, s) and self._end_ok16(data, e)) if unit == 2 else \
@@ -410,6 +526,10 @@ class Replacer:
                         ok = self._affix(data, s, e, unit, key)
                     if not ok and (hs or he) and key in self._distinctive:
                         ok = True  # Q.R.VELLMOR glued to the next fixed-width field
+                    if not ok and key in self._mixed_codes:
+                        low = lambda i: 0 <= i < len(data) and 97 <= data[i] <= 122 and (unit == 1 or data[i + 1] == 0)
+                        upper = not any(97 <= c <= 122 for c in data[s:e])  # the code itself is upper-case
+                        ok = upper and (hs and low(e) or he and low(s - unit))
             else:
                 ok = True
             if not ok:

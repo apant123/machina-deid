@@ -47,9 +47,13 @@ class Ctx:
     in_cad_container: bool = False  # images inside FCStd/3MF/f3d are thumbnails -> neutral
     notes: list = field(default_factory=list)
     logo_cache: dict | None = None  # image sha256 -> [(box, score)] from the logo scan (None = detect live)
+    blank_images: dict | None = None  # image sha256 -> 'logo' | 'signature': whole image blanked (logo_clip)
+    vector_logos: dict | None = None  # top-level PDF blob sha256 -> [rect] vector logos on page 1 (vector_logo_scan)
+    blob_sha: str | None = None       # sha256 of the top-level blob being rewritten
 
     def child(self, **kw) -> "Ctx":
-        c = Ctx(self.dm, self.st, self.depth + 1, self.tmp, self.in_cad_container, self.notes, self.logo_cache)
+        c = Ctx(self.dm, self.st, self.depth + 1, self.tmp, self.in_cad_container, self.notes, self.logo_cache,
+                self.blank_images, None, None)  # vector logo boxes belong to the top-level PDF only
         for k, v in kw.items():
             setattr(c, k, v)
         return c

@@ -160,6 +160,7 @@ keep_terms:
   - JStand
   - Alu Carre         # French aluminium profile names (carré / cornière)
   - Alu Corniere
+  - N. DISEGNO       # Italian title-block label "drawing no." (looks like Initial. Surname)
   - ISO
   - DIN
   - ANSI
@@ -403,6 +404,8 @@ generic_mail_domains:
 
 # Account names that identify nobody (extends deid.replace.GENERIC_ACCOUNTS).
 generic_accounts:
+  - GLOBAL          # Windows domain names, not people (GLOBAL\\user, ENGINEERING\\user)
+  - ENGINEERING
   - Workstation
   - Author
   - support

@@ -211,6 +211,11 @@ def host_kept(host: str) -> bool:
     return any(host == d or host.endswith("." + d) for d in policy()["keep_domains"])
 
 
+PERSON_NAME_RX = re.compile(r"[A-Z][a-z]+ [A-Z][A-Za-z'\-]{2,}")  # 'Mira Talvenk' typed account
+HOST_RX = re.compile(r"(?=.{5,}$)[A-Za-z][A-Za-z0-9]*(?:[0-9]|-[A-Za-z0-9])[A-Za-z0-9\-]*")  # machine names: letters + digits / '-'
+
+
+
 @dataclass
 class Ent:
     k: str
@@ -239,7 +244,8 @@ class Builder:
         self.ents: dict[str, Ent] = {}
         self.decisions: list[dict] = []  # dropped / kept candidates, for the report
 
-    def add(self, surface: str, etype: str, source: str, nb: int = 1, evidence: str = "", tag: str | None = None):
+    def add(self, surface: str, etype: str, source: str, nb: int = 1, evidence: str = "", tag: str | None = None,
+            exact: bool = False):
         surface = re.sub(r"\s+", " ", surface).strip(" \t\"'.,;:()[]{}<>|")
         if len(surface) < 2 or not re.search(r"[^\W\d_]", surface) or "${" in surface or \
                 re.search(r"[\x00-\x1f\x7f-\x9f\ufffd\uffff]", surface):
@@ -250,6 +256,8 @@ class Builder:
         k = key(surface)
         if len(k) < 2:
             return
+        if exact:  # own entity: 'ZORB®' must not merge with every 'Zorb'/'ZORB' candidate (same key)
+            k = "exact:" + surface.casefold()
         e = self.ents.setdefault(k, Ent(k))
         e.etype[etype] += 1
         e.surfaces[surface] += nb
@@ -258,6 +266,7 @@ class Builder:
         e.nb = max(e.nb, nb)
         if evidence and len(e.evidence) < 3:
             e.evidence.append(evidence[:160])
+        return k
 
     def drop(self, surface, etype, source, reason, nb=1, score=None):
         self.decisions.append(dict(surface=surface, etype=etype, source=source, decision="drop", reason=reason, nb=nb,
@@ -441,7 +450,19 @@ class Builder:
         """Reviewer additions after the spot-check: ENT_DIR/manual_seeds.yaml (PII -> data dir, never in code)."""
         f = ENT_DIR / "manual_seeds.yaml"
         for r in (yaml.safe_load(f.read_text()) or []) if f.exists() else []:
-            self.add(r["surface"], r.get("type", "org"), "manual", 0, "manual seed (spot-check review)", tag="owner")
+            k = self.add(r["surface"], r.get("type", "org"), "manual", 0, "manual seed (spot-check review)",
+                         tag=r.get("tag", "owner"), exact=bool(r.get("exact")))
+            if k in self.ents:
+                self.ents[k].tags.add("owner")  # a reviewer seed is always corroborated
+                if r.get("scope") == "field":   # whole field value only (author / last-saved-by initials, first names)
+                    self.ents[k].tags.add("field_value")
+
+    def from_initials(self):
+        """Whole-field 'Initial. Surname' title-block names (ENT_DIR/initial_names.yaml, private): persons NER never
+        proposed ('D. SURNAME' in a drawing title block). Never expanded to the bare surname (see variants)."""
+        f = ENT_DIR / "initial_names.yaml"
+        for r in (yaml.safe_load(f.read_text()) or []) if f.exists() else []:
+            self.add(r["surface"], "person", "initials", r.get("nb", 0), "whole-field Initial. Surname", tag="owner")
 
     def from_ner(self):
         import duckdb
@@ -784,11 +805,15 @@ class Builder:
         toks = [t.lower() for t in TOKEN_RX.findall(s) if not t.isdigit()]
         k = key(s)
         scope = "field" if e.type not in ("phone", "email", "domain") and self.weak(k, s) else "global"
-        if scope == "field" and (e.type == "vendor" and len(k) >= 4 or "org_acronym" in e.tags and s.isupper() and len(k) >= 3):
+        if scope == "field" and (e.type == "vendor" and len(k) >= 4 or "org_acronym" in e.tags and len(k) >= 3 and
+                                 any(x.isupper() for x in e.surfaces) or
+                                 e.type == "account" and HOST_RX.fullmatch(s) is not None):  # 'NAME6300', 'NAME-PC' hosts
             scope = "global"  # deliberate gazetteer vendors (4-letter brands) / org acronyms (3-letter universities): Replacer still
             #                   only replaces keys <= 4 chars as whole delimited strings
-        if scope == "field" and len(k) <= 3 and not CJK_RANGE.search(s):
+        if scope == "field" and len(k) <= 3 and not CJK_RANGE.search(s) and "field_value" not in e.tags:
             scope = "path"  # profile-folder / repo-owner component only
+        if "field_value" in e.tags and scope == "global" and (self.weak(k, s) or len(k) <= 4):
+            scope = "field"  # a field-scope seed never becomes a free-text key
         return dict(surface=s, pseudonym=fake, entity=e.k, etype=e.type, scope=scope,
                     sources=",".join(sorted(e.sources)), nb=e.nb, observed=s in e.surfaces,
                     alias_of=e.alias_of, xlink=e.xlink, evidence=" | ".join(e.evidence), widths_ok=same_widths(s, fake))
@@ -802,25 +827,88 @@ class Builder:
         dic = dictionary()
         for s, f in list(out.items()):
             toks, ftoks = s.split(" "), f.split(" ")
-            if len(toks) < 2 or len(toks) != len(ftoks) or CJK_RANGE.search(s) or e.type not in ("person", "org", "vendor", "brand"):
+            if len(toks) < 2 or len(toks) != len(ftoks) or CJK_RANGE.search(s) or \
+                    e.type not in ("person", "org", "vendor", "brand") and \
+                    not (e.type == "account" and PERSON_NAME_RX.fullmatch(s)):
                 continue
             for sep in ("_", "-", ".", ""):
                 out.setdefault(sep.join(toks), sep.join(ftoks))
-            if e.type == "person" and len(toks) == 2 and toks[0][:1].isalpha() and ftoks[0][:1].isalpha():
+            person_like = e.type == "person" or e.type == "account" and PERSON_NAME_RX.fullmatch(s) is not None
+            if person_like and len(toks) == 2 and toks[0][:1].isalpha() and ftoks[0][:1].isalpha():
                 out.setdefault(f"{toks[1]}, {toks[0]}", f"{ftoks[1]}, {ftoks[0]}")
                 out.setdefault(f"{toks[1]} {toks[0]}", f"{ftoks[1]} {ftoks[0]}")
                 if len(toks[0].rstrip(".")) >= 2 and len(toks[1]) >= 4:  # not from 'Zelnik O' -> 'NO'
-                    out.setdefault(f"{toks[0][0]}. {toks[1]}", f"{ftoks[0][0]}. {ftoks[1]}")
+                    out.setdefault(f"{toks[0][0]}. {toks[1]}", f"{ftoks[0][0]}. {ftoks[1]}")  # title-block 'D. Surname'
+                    out.setdefault(f"{toks[0][0]}.{toks[1]}", f"{ftoks[0][0]}.{ftoks[1]}")    # ... and 'D.Surname'
                     out.setdefault(f"{toks[0][0]}{toks[1]}", f"{ftoks[0][0]}{ftoks[1]}")  # jsmith-style handle
             # rare surname tokens alone ("Kestro", "Talvenk"): non-dictionary, >= 5 letters, and the person is
             # corroborated beyond NER ('Jack Ploder' from NER must not turn every 'Ploder' into a surname)
-            if e.type == "person" and set(e.sources) - {"ner"}:  # ... and not a kept term ('Allen' key, 'Phillips')
+            if e.type == "person" and set(e.sources) - {"ner", "initials"}:  # ... and not a kept term ('Allen' key, 'Phillips')
                 for t, ft in zip(toks[1:], ftoks[1:]):
                     if len(t) >= 5 and t.isalpha() and t.lower() not in dic and t.lower() not in NAME_PARTICLES \
                             and not is_kept(t):
                         out.setdefault(t, ft)
+        if e.type == "account":  # 'HOST\\user' -> the machine / domain name on its own ('HOST' in '(HOST)' authors)
+            generic = {key(g) for g in GENERIC_ACCOUNTS | set(policy()["generic_accounts"])}
+            for s, f in list(out.items()):
+                if "\\" in s and "\\" in f:
+                    d, fd = s.split("\\", 1)[0], f.split("\\", 1)[0]
+                    if len(d) >= 5 and len(fd) == len(d) and key(d) not in generic and not is_kept(d) \
+                            and not re.fullmatch(r"(?i)[a-z]:|.*\.(com|org|net|edu|local)", d):
+                        out.setdefault(d, fd)
         return [(s, f) for s, f in out.items()
                 if s in e.surfaces or CJK_RANGE.search(s) or len(s) >= 4]
+
+    def pin(self, rows: list[dict]) -> list[dict]:
+        """Once outputs are published the map is append-only: ENT_DIR/map.pinned.parquet (the published map) wins.
+
+        - a pinned surface keeps its pseudonym (adding entities re-orders token assignment: 'M. Talvenk' must not
+          change after 188k files were written with it); pinned rows are never dropped;
+        - a NEW initial form ('D. Surname', 'D.SURNAME') of a pinned 'Given Surname' takes the pinned tokens
+          ('Mira Talvenk' -> 'Ines Fintaro' gives 'I. Fintaro');
+        - a NEW machine name 'HOST' of a pinned 'HOST\\user' takes the pinned 'FAKE\\...' host part."""
+        f = ENT_DIR / "map.pinned.parquet"
+        if not f.exists():
+            return rows
+        cols = list(rows[0]) if rows else []
+        ck = lambda x: x.casefold() if x.isascii() else x
+        prev = {}
+        for r in pq.read_table(f).to_pylist():
+            prev.setdefault(ck(r["surface"]), {c: r.get(c) for c in cols})
+        names, hosts = {}, {}
+        for r in prev.values():
+            m = PERSON_NAME_RX.fullmatch(r["surface"])
+            fm = PERSON_NAME_RX.fullmatch(r["pseudonym"]) if m else None
+            if m and fm and r["etype"] in ("person", "account"):
+                g, sn = r["surface"].split(" ")
+                fg, fsn = r["pseudonym"].split(" ")
+                names.setdefault((g[0].casefold(), sn.casefold()), (fg[0], fsn))
+            if "\\" in r["surface"] and "\\" in r["pseudonym"]:
+                hosts.setdefault(r["surface"].split("\\", 1)[0].casefold(), r["pseudonym"].split("\\", 1)[0])
+        shape = lambda o, f: "".join(c.upper() if a.isupper() else c.lower() if a.islower() else c for a, c in zip(o, f))
+        out, seen, pinned, derived = [], set(), 0, 0
+        for r in rows:
+            k = ck(r["surface"])
+            if k in prev:
+                if r["pseudonym"] != prev[k]["pseudonym"]:
+                    pinned += 1
+                r = dict(r, pseudonym=prev[k]["pseudonym"], widths_ok=prev[k]["widths_ok"])
+            else:
+                m = re.fullmatch(r"([A-Za-z])(\. ?)([A-Za-z][A-Za-z'\-]+)", r["surface"])
+                fake = None
+                if m and (m.group(1).casefold(), m.group(3).casefold()) in names:
+                    fi, fsn = names[(m.group(1).casefold(), m.group(3).casefold())]
+                    fake = shape(m.group(1), fi) + m.group(2) + shape(m.group(3), fsn)
+                elif "\\" not in r["surface"] and k in hosts and len(hosts[k]) == len(r["surface"]):
+                    fake = shape(r["surface"], hosts[k])
+                if fake and len(fake) == len(r["surface"]) and fake != r["pseudonym"]:
+                    r = dict(r, pseudonym=fake, widths_ok=same_widths(r["surface"], fake))
+                    derived += 1
+            seen.add(k)
+            out.append(r)
+        missing = [dict(v) for k, v in prev.items() if k not in seen]
+        print(dict(pinned_changed=pinned, derived_from_pinned=derived, pinned_rows_kept=len(missing)), flush=True)
+        return out + missing
 
     def run(self):
         self.short_names: list = []
@@ -833,13 +921,14 @@ class Builder:
         print("vendors", flush=True)
         self.from_vendors()
         self.from_manual()
+        self.from_initials()
         print("ner", flush=True)
         if list(NER_DIR.glob("spans-*.parquet")):
             self.from_ner()
         self.prune()
         self.link_aliases()
         self.link_scripts()
-        rows = self.build_map()
+        rows = self.pin(self.build_map())
         ENT_DIR.mkdir(parents=True, exist_ok=True)
         # token-level map rows from different entities may share a surface: first (highest-evidence) wins
         seen, uniq = set(), []

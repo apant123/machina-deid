@@ -182,3 +182,48 @@ The output bucket was checked against the plan key by key: 188,599 objects (142.
 **Still open (runner hardening):** a worker that dies by signal or OOM is still not detected, so `multiprocessing.Pool` waits forever for its result. Before the Batch definition is final, the runner should notice dead workers and record the blob as failed.
 
 **Residual flags:** 10,420 output files still contain an original key at a word start. As in the sample, most are expected to be false alarms (compressed or encoded data, identifiers). The Stage 4 leak scan reviews them.
+
+## Fix round after the visual spot-check
+A manual review of output PDFs found leaks that no automatic check had flagged. The residual check only looks for names that are already in the map, so it cannot see names missing from it. The fixes, and how they were applied without re-running the whole corpus:
+
+**Logos**
+- **Cache-key regression:** the JPEG-in/JPEG-out memory fix had started hashing raw JPEG bytes, while the logo cache is keyed by the pixmap PNG, so every lookup missed and a miss silently meant "no logo". The cache key is now always the pixmap PNG, and a miss now runs live detection and is counted (`logo_cache_miss`); 258 misses in the re-run.
+- **Whole-image logos and signatures (`deid/logo_clip.py`):** OWLv2 finds logos *inside* a scene and gives an image that *is* a logo (a title-block raster) low, partial boxes. A CLIP zero-shot classifier scores every cached image, 38,232 in 7 minutes, and the rewrite blanks the whole image when the image is 4 MP or smaller and one of these rules holds:
+  - **A:** logo score ≥ 0.90;
+  - **B:** logo score 0.80–0.90 with OWLv2 support ≥ 0.10;
+  - **S:** signature score ≥ 0.90 and shortest side ≥ 60 px.
+
+  These thresholds were chosen at a contact-sheet review. 837 logos and 30 handwritten signatures are blanked.
+- **Deferred to Stage 4:**
+  - OWLv2 boxes can be slightly tighter than the logo, leaving a thin edge visible (fix: pad about 8%, then re-run about 2k files);
+  - vector-drawn logos.
+
+**Map (Stage 2)**
+- **Institutions and companies:** the dictionary-word, part-number and single-acronym filters had dropped them. A reviewed list was added as private seeds: 234 institutions and 102 companies. Standards bodies, publishers, learned societies, generic phrases and CAD tool makers are kept.
+- **Seeds for org acronyms** are global (`tag: org_acronym`). An `exact: true` seed gets its own entity, so a mark like `ZORB®` never merges with the plain word `Zorb`.
+- **Person initials:**
+  - "D. Surname" and "D.Surname" variants of mapped names, including accounts that look like "Given Surname";
+  - whole-field Initial. Surname title-block names that NER never proposed (337 forms, private `initial_names.yaml`); their bare surnames are never mapped alone.
+- **Machine names:** the HOST part of `HOST\user` accounts is mapped on its own, global for host-shaped strings (letters with digits or `-`). `GLOBAL` and `ENGINEERING` are generic Windows domains and are kept.
+- **Pinning:** once outputs are published the map is append-only. `map.pinned.parquet` fixes every published pseudonym, because adding persons reorders token assignment and changed 117 published pseudonyms before pinning. A new initial or host form takes its pseudonym from the pinned full name or `HOST\user` row ("Mira Talvenk" → "Ines Fintaro" gives "I. Fintaro"). Pinned rows: 0 removed, 0 changed.
+
+**PDF text layer:** CAD-exported PDFs often have character boxes taller than the line pitch, and MuPDF removes every glyph a redaction touches. A replacement therefore erased letters of the lines above and below it. Redactions are now a thin strip through the middle of the x-height (`_glyph_core`), with a regression test. A text-damage scan (expected unmapped words vs output words) found 1,438 of the 4,126 PDFs with text replacements damaged. Only those were re-run.
+
+**Memory:** scrubbed grey and 1-bit images keep their source mode (an RGB replacement is held raw by PyMuPDF; a 392-page bilevel scan was OOM-killed).
+
+**Targeted re-runs** (`rewrite_run run --only FILE`), each followed by stale-key cleanup and key-by-key reconciliation:
+
+| Round | Blobs | Why |
+|---|---|---|
+| 1 | 7,250 | new or widened map surfaces in text (6,371), renamed keys (593), whole-image logos/signatures (1,240), cache-key regression (16), renamed-stem references (1) |
+| 2 | 1,444 | text-damaged PDFs (1,438), the "drawing no." label false positive (6). Result: 1,442 ok, 2 quarantined (OCR runtime error on a 392-page scan under load; a PDF link without its own object). Both are fixed and re-run in Stage 4 |
+
+The renamed keys left 613 stale output objects, which were deleted. After round 1 the output bucket matched the plan (188,599 objects, 0 missing, 0 unexpected). After round 2 it is 0 missing and 5 unexpected: the earlier outputs of the 2 quarantined blobs, which the Stage 4 re-run replaces.
+
+**Runner additions:**
+- `--only` re-runs exactly the listed blobs;
+- `--retry-error` re-runs quarantines whose error matches;
+- `tmp_rewrite/inflight/<pid>` records the blob each worker holds, which identifies OOM-killed workers;
+- status part names carry the pid, so concurrent runners never collide.
+
+Dead-worker recovery inside `multiprocessing.Pool` is still open; a lost task makes the pool wait forever, and is recovered by re-running the unrecorded blobs.

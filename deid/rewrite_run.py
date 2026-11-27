@@ -79,11 +79,13 @@ def _init(dry: bool):
     import warnings
     warnings.filterwarnings("ignore")
     from .logo_scan import load_cache
+    from .logo_clip import load_blank_set
     from .rewrite.dispatch import Ctx
     from .rewrite.mapping import default_map
     TMP.mkdir(parents=True, exist_ok=True)
     os.environ.setdefault("DEID_TMP", str(TMP))
-    _ctx = Ctx(default_map(), tmp=TMP, logo_cache=load_cache())
+    from .vector_logo_scan import confirmed
+    _ctx = Ctx(default_map(), tmp=TMP, logo_cache=load_cache(), blank_images=load_blank_set(), vector_logos=confirmed())
     _s3 = s3_client()
     _dry = dry
     signal.signal(signal.SIGALRM, _alarm)
@@ -104,6 +106,9 @@ def work(job: dict) -> dict:
     t0 = time.time()
     out = dict(sha256=job["sha256"], format=job["format"], size=job["size"], status="error", out_fmt=None, out_size=None,
                n_keys=len(job["keys"]), members=0, residual=None, info=None, error=None)
+    inflight = TMP / "inflight" / str(os.getpid())  # which blob each worker is on (diagnose OOM-killed workers)
+    inflight.parent.mkdir(parents=True, exist_ok=True)
+    inflight.write_text(f"{job['sha256']} {job['format']} {job['size']}\n")
     fd, src = tempfile.mkstemp(dir=TMP, prefix="src-")
     os.close(fd)
     dst = Path(src + ".out")
@@ -111,6 +116,7 @@ def work(job: dict) -> dict:
         signal.alarm(TIMEOUT)
         _s3.download_file(STAGING_BUCKET, job["canonical_key"], src)
         _ctx.st = Stats()
+        _ctx.blob_sha = job["sha256"]  # page-region logos are looked up per top-level blob
         name = job["canonical_key"].rsplit("/", 1)[-1]
         o = rewrite_path(Path(src), dst, name, _ctx)
         out.update(status=o.status, out_fmt=o.fmt, members=o.members, residual=json.dumps(o.residual[:50], ensure_ascii=False),
@@ -127,7 +133,7 @@ def work(job: dict) -> dict:
         out.update(status="error", error=f"{type(e).__name__}: {e}"[:300], info=traceback.format_exc()[-2000:])
     finally:
         signal.alarm(0)
-        for p in (Path(src), dst):
+        for p in (Path(src), dst, inflight):
             p.unlink(missing_ok=True)
     out["seconds"] = round(time.time() - t0, 2)
     return out
@@ -151,15 +157,17 @@ def _done(retry_error: str | None = None) -> set:
             (retry_error and r["status"] == "quarantine" and retry_error in (r["error"] or ""))}
 
 
-def run(workers: int, limit: int | None, formats: set | None, dry: bool, retry_error: str | None = None) -> None:
+def run(workers: int, limit: int | None, formats: set | None, dry: bool, retry_error: str | None = None,
+        only: set | None = None) -> None:
+    """`only`: re-run exactly these blob sha256s (targeted re-run after a map change), done or not."""
     PARTS.mkdir(parents=True, exist_ok=True)
     keys = {}
     for r in pq.read_table(RW_DIR / "keys.parquet").to_pylist():
         keys.setdefault(r["sha256"], {})[r["key"]] = r["new_key"]
     blobs = pq.read_table(MANIFEST_DIR / "blobs.parquet", columns=["sha256", "size", "format", "canonical_key", "keys"]).to_pylist()
-    done = _done(retry_error)
+    done = set() if only else _done(retry_error)
     jobs = [dict(b, renamed=keys[b["sha256"]]) for b in blobs if b["sha256"] not in done and
-            (not formats or b["format"].split(":")[0] in formats)]
+            (not only or b["sha256"] in only) and (not formats or b["format"].split(":")[0] in formats)]
     jobs.sort(key=lambda j: -j["size"])  # big files first: the tail of the run is short ones
     if limit:
         jobs = jobs[:limit]
@@ -168,7 +176,7 @@ def run(workers: int, limit: int | None, formats: set | None, dry: bool, retry_e
 
     def flush():
         if rows:
-            tag = f"{len(list(PARTS.glob('status-*.parquet'))):05d}"
+            tag = f"{len(list(PARTS.glob('status-*.parquet'))):05d}-{os.getpid()}"  # pid: concurrent runners never collide
             pq.write_table(pa.Table.from_pylist(rows, schema=SCHEMA), PARTS / f"status-{tag}.parquet")
             rows.clear()
     with get_context("fork").Pool(workers, initializer=_init, initargs=(dry,), maxtasksperchild=200) as pool:
@@ -214,11 +222,13 @@ if __name__ == "__main__":
     ap.add_argument("--formats")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--retry-error", help="also re-run quarantines whose error contains this text")
+    ap.add_argument("--only", help="file with blob sha256s (one per line): re-run exactly these")
     a = ap.parse_args()
     if a.cmd == "plan":
         plan()
     elif a.cmd == "run":
-        run(a.workers, a.limit, set(a.formats.split(",")) if a.formats else None, a.dry_run, a.retry_error)
+        run(a.workers, a.limit, set(a.formats.split(",")) if a.formats else None, a.dry_run, a.retry_error,
+            set(Path(a.only).read_text().split()) if a.only else None)
     else:
         report()
     sys.exit(0)

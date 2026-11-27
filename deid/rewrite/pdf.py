@@ -13,6 +13,8 @@
 """
 from __future__ import annotations
 
+import hashlib
+
 import re
 import shutil
 from pathlib import Path
@@ -24,6 +26,20 @@ _HEX16 = re.compile(r"<(FEFF(?:[0-9A-Fa-f]{4})+)>")
 
 def _is_cjk(s: str) -> bool:
     return any("　" <= c <= "鿿" or "가" <= c <= "힯" or "＀" <= c <= "￯" for c in s)
+
+
+def _glyph_core(rect, origin, size: float, direction):
+    """Redaction box shrunk to the glyph core. Char bboxes in CAD-exported PDFs often span the font's full
+    ascender/descender (taller than the line pitch), and MuPDF removes every glyph a redaction touches: a
+    replaced word erased letters of the lines above and below ('...ITUTE OF TECHNOLOGY')."""
+    import pymupdf
+    if abs(direction[1]) > 0.5:      # vertical text: shrink across the line (x), keep the run length (y)
+        cx = origin[0]
+        return pymupdf.Rect(max(rect.x0, cx - 0.15 * size), rect.y0 + 0.3, min(rect.x1, cx + 0.75 * size), rect.y1 - 0.3)
+    y = origin[1]                    # horizontal: a thin strip through the middle of the x-height. MuPDF removes
+    #                                  every glyph whose box touches it (all of the run), while the boxes of the
+    #                                  lines above / below end at their descender / ascender and never reach it
+    return pymupdf.Rect(rect.x0 + 0.3, y - 0.45 * size, rect.x1 - 0.3, y - 0.25 * size)
 
 
 def _text_layer(doc, ctx: Ctx, info: dict):
@@ -58,6 +74,7 @@ def _text_layer(doc, ctx: Ctx, info: dict):
                         rect = pymupdf.Rect(chars[i]["bbox"])
                         for c in chars[i + 1:j]:
                             rect |= pymupdf.Rect(c["bbox"])
+                        rect = _glyph_core(rect, chars[i]["origin"], span["size"], line.get("dir", (1, 0)))
                         todo.append((rect, chars[i]["origin"], new[i:j], span["size"], span.get("color", 0), line.get("dir", (1, 0))))
                         i = j
         if not todo:
@@ -84,6 +101,61 @@ def _text_layer(doc, ctx: Ctx, info: dict):
             info["text_replaced"] += 1
 
 
+def _vector_logos(doc, ctx: Ctx, info: dict):
+    """Blank page-region logos / signatures found by vector_logo_scan: inline images (no xref, invisible to the
+    image passes) and vector-drawn logos. Image pixels and paths fully inside the box are removed, then the
+    neutral mark is drawn (signatures: flat blank). Page-1 vector hits are applied to later pages whose region
+    renders the same (repeated title blocks)."""
+    import pymupdf
+    regs = (ctx.vector_logos or {}).get(ctx.blob_sha) if ctx.depth == 0 else None
+    if not regs or not doc.page_count:
+        return
+    def thumb(page, r):
+        pix = page.get_pixmap(clip=r, dpi=36, colorspace=pymupdf.csGRAY)
+        return pix.samples, (pix.width, pix.height)
+    per_page: dict[int, list] = {}
+    for g in regs:
+        if g["page"] < doc.page_count:
+            per_page.setdefault(g["page"], []).append((pymupdf.Rect(g["rect"]), g["kind"]))
+    p0 = doc[0]
+    refs = [(pymupdf.Rect(g["rect"]), g["kind"], thumb(p0, pymupdf.Rect(g["rect"]))) for g in regs
+            if g.get("propagate") and g["page"] == 0]
+    for page in doc:
+        hits = list(per_page.get(page.number, []))
+        if page.number > 0 and page.rect == p0.rect:
+            for r, kind, (t0, size0) in refs:
+                t, size = thumb(page, r)
+                if size == size0 and t and sum(abs(a - b) for a, b in zip(t, t0)) / len(t) < 12:
+                    hits.append((r, kind))
+        if not hits:
+            continue
+        # stamp / free-text annotations draw ON TOP of the page content: a logo stored as a Stamp appearance
+        # stream survives the content redaction, so annotations mostly inside a region are removed
+        for a in list(page.annots() or []):
+            if a.type[0] in (pymupdf.PDF_ANNOT_LINK, pymupdf.PDF_ANNOT_WIDGET, pymupdf.PDF_ANNOT_REDACT):
+                continue
+            ar = a.rect
+            if ar.is_empty:
+                continue
+            if any((ar & r).get_area() >= 0.5 * min(ar.get_area(), r.get_area()) for r, _ in hits):
+                page.delete_annot(a)
+                info["region_annots_removed"] = info.get("region_annots_removed", 0) + 1
+        for r, _ in hits:
+            page.add_redact_annot(r, fill=(1, 1, 1))
+        # pixels of images in the box + paths fully inside it; text is left to the text-layer pass (a logo box
+        # often touches the title-block text next to it, and MuPDF removes every glyph a redaction touches)
+        page.apply_redactions(images=pymupdf.PDF_REDACT_IMAGE_PIXELS, graphics=pymupdf.PDF_REDACT_LINE_ART_REMOVE_IF_COVERED,
+                              text=pymupdf.PDF_REDACT_TEXT_NONE)
+        for r, kind in hits:
+            if kind == "logo":
+                pad = max(2, min(r.width, r.height) / 6)
+                page.draw_rect(pymupdf.Rect(r.x0 + pad, r.y0 + pad, r.x1 - pad, r.y1 - pad), color=(0.59, 0.59, 0.59),
+                               width=max(0.5, pad / 3), radius=0.2)
+                info["region_logos"] = info.get("region_logos", 0) + 1
+            else:
+                info["region_signatures"] = info.get("region_signatures", 0) + 1
+
+
 def _images(doc, ctx: Ctx, info: dict):
     import pymupdf
     from .image import scrub_bytes, scrub_pil
@@ -97,22 +169,28 @@ def _images(doc, ctx: Ctx, info: dict):
             try:
                 if img[2] < 48 or img[3] < 24:
                     continue
+                # the logo cache is keyed by the PNG of the pixmap (as deid.logo_scan hashes it)
+                pix = pymupdf.Pixmap(doc, xref)  # SMask (img[1]) is kept; only the base image is scrubbed
+                if pix.n - pix.alpha >= 4:
+                    pix = pymupdf.Pixmap(pymupdf.csRGB, pix)
+                png = pix.tobytes("png")
+                pix = None
+                key = hashlib.sha256(png).hexdigest()
                 if img[8] == "DCTDecode" and img[5] in ("DeviceRGB", "DeviceGray"):
                     # JPEG in -> JPEG out: PyMuPDF stores a JPEG replacement as-is, while a PNG one is
                     # decoded and held as raw samples until save (~0.4 GB per 66 MP page: OOM on big scans)
                     data = doc.xref_stream_raw(xref)
                 else:
-                    pix = pymupdf.Pixmap(doc, xref)  # SMask (img[1]) is kept; only the base image is scrubbed
-                    if pix.n - pix.alpha >= 4:
-                        pix = pymupdf.Pixmap(pymupdf.csRGB, pix)
-                    data = pix.tobytes("png")
-                    pix = None
+                    data = png
+                png = None
             except Exception:  # noqa: BLE001
                 info["image_errors"] += 1
                 continue
-            new, sinfo = scrub_bytes(data, ctx, image_id=f"{info['name']}#x{xref}")
+            new, sinfo = scrub_bytes(data, ctx, image_id=f"{info['name']}#x{xref}", img_sha=key)
+            info["logo_cache_miss"] += sinfo.get("logo_cache_miss", 0)
             info["ocr_lines"] += sinfo.get("replaced_lines", 0)
             info["logos"] += sinfo.get("logos", 0)
+            info["signatures"] += sinfo.get("signatures", 0)
             if new is not data:
                 try:
                     page.replace_image(xref, stream=new)
@@ -169,8 +247,11 @@ def _meta(doc, ctx: Ctx, info: dict):
         for ln in page.get_links():
             if ln.get("uri") and (nu := ctx.dm.text(ln["uri"], ctx.st)) != ln["uri"]:
                 ln["uri"] = nu
-                page.update_link(ln)
-                info["links"] += 1
+                try:
+                    page.update_link(ln)
+                    info["links"] += 1
+                except Exception:  # noqa: BLE001 - link without its own object ('bad xref'): its /URI string is
+                    info["link_errors"] = info.get("link_errors", 0) + 1  # rewritten by _objects (page / annot dicts)
 
 
 def _embedded(doc, ctx: Ctx, info: dict) -> bool:
@@ -241,7 +322,8 @@ def rewrite_pdf(src: Path, dst: Path, ctx: Ctx) -> Outcome:
     import pymupdf
     pymupdf.TOOLS.mupdf_display_errors(False)
     info = dict(name=src.name, text_replaced=0, images_replaced=0, pages_overlaid=0, ocr_lines=0, logos=0, meta=False,
-                annots=0, fields=0, links=0, embedded=0, objects=0, object_errors=0, streams=0, image_errors=0)
+                annots=0, fields=0, links=0, embedded=0, objects=0, object_errors=0, streams=0, image_errors=0, logo_cache_miss=0,
+                signatures=0)
     try:
         doc = pymupdf.open(src)
     except Exception as e:  # noqa: BLE001
@@ -250,6 +332,7 @@ def rewrite_pdf(src: Path, dst: Path, ctx: Ctx) -> Outcome:
         return Outcome("quarantine", "pdf", dict(error="encrypted pdf"))
     with doc:
         _text_layer(doc, ctx, info)
+        _vector_logos(doc, ctx, info)
         _images(doc, ctx, info)
         _meta(doc, ctx, info)
         if not _embedded(doc, ctx, info):

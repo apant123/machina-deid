@@ -147,11 +147,16 @@ def is_callout(crop) -> bool:
     return abs(x - w / 2) < 0.2 * s and abs(y - h / 2) < 0.2 * s
 
 
-def logo_boxes(work, ctx: Ctx, img_sha: str | None):
-    """Cached detections (logo scan pass) when available; boxes are in `work` coordinates. Callouts dropped."""
-    if ctx.logo_cache is not None and img_sha is not None:
-        boxes = [(tuple(b), s) for b, s in ctx.logo_cache.get(img_sha, []) if s >= LOGO_THRESHOLD]
+def logo_boxes(work, ctx: Ctx, img_sha: str | None, info: dict | None = None):
+    """Cached detections (logo scan pass) when available; boxes are in `work` coordinates. Callouts dropped.
+
+    The cache holds every scanned image (empty list = nothing found), so a missing key is a real miss:
+    detect live and count it, never treat it as 'no logo' (a silent miss shipped logos once)."""
+    if ctx.logo_cache is not None and img_sha is not None and img_sha in ctx.logo_cache:
+        boxes = [(tuple(b), s) for b, s in ctx.logo_cache[img_sha] if s >= LOGO_THRESHOLD]
     else:
+        if ctx.logo_cache is not None and info is not None:
+            info["logo_cache_miss"] = info.get("logo_cache_miss", 0) + 1
         boxes = detect_logos(work)
     if not boxes:
         return boxes
@@ -163,6 +168,19 @@ def scrub_pil(im, ctx: Ctx, image_id: str = "", logos: bool = True, img_sha: str
     """-> (image, info). info: ocr_lines, replaced_lines, logos."""
     import numpy as np
     info = dict(ocr_lines=0, replaced_lines=0, logos=0)
+    kind = (ctx.blank_images or {}).get(img_sha) if img_sha else None
+    if kind is not None:  # the whole image IS a logo / signature (logo_clip review): blank it entirely
+        out = im.convert("RGB")
+        box = (0, 0, out.width, out.height)
+        if kind == "logo":
+            _neutral_mark(out, box)
+            info["logos"] = 1
+        else:
+            from PIL import ImageDraw
+            ImageDraw.Draw(out).rectangle(box, fill=_bg_ink(out, box)[0])
+            info["signatures"] = 1
+        LOGO_LOG.append((image_id, box, kind))
+        return out, info
     if im.width < MIN_SIDE or im.height < MIN_SIDE:
         return im, info
     work = im
@@ -186,7 +204,7 @@ def scrub_pil(im, ctx: Ctx, image_id: str = "", logos: bool = True, img_sha: str
             _draw_text(out, box, new)
             info["replaced_lines"] += 1
     if logos and min(im.size) >= 32:
-        for box, s in logo_boxes(work, ctx, img_sha):
+        for box, s in logo_boxes(work, ctx, img_sha, info):
             b = tuple(int(v * scale) for v in box)
             if out is None:
                 out = im.convert("RGB")
@@ -196,8 +214,11 @@ def scrub_pil(im, ctx: Ctx, image_id: str = "", logos: bool = True, img_sha: str
     return (out if out is not None else im), info
 
 
-def scrub_bytes(data: bytes, ctx: Ctx, image_id: str = "", logos: bool = True) -> tuple[bytes, dict]:
-    """Returns the original bytes when nothing was found, else a re-encoded image (metadata dropped)."""
+def scrub_bytes(data: bytes, ctx: Ctx, image_id: str = "", logos: bool = True,
+                img_sha: str | None = None) -> tuple[bytes, dict]:
+    """Returns the original bytes when nothing was found, else a re-encoded image (metadata dropped).
+
+    `img_sha` overrides the cache key when `data` is not the form the logo scan hashed (PDF JPEGs)."""
     from PIL import Image, UnidentifiedImageError
     Image.MAX_IMAGE_PIXELS = 600_000_000
     try:
@@ -207,9 +228,14 @@ def scrub_bytes(data: bytes, ctx: Ctx, image_id: str = "", logos: bool = True) -
     except (UnidentifiedImageError, OSError, ValueError):
         return data, dict(error="unreadable image")
     import hashlib
-    new, info = scrub_pil(im, ctx, image_id, logos, hashlib.sha256(data).hexdigest())
+    new, info = scrub_pil(im, ctx, image_id, logos, img_sha or hashlib.sha256(data).hexdigest())
     if new is im:
         return data, info
+    if im.mode in ("1", "L") and new.mode != im.mode:
+        # back to the source mode: a bilevel / grey scan stays 1 / 8 bits per pixel. An RGB replacement is held
+        # by PyMuPDF as raw samples until save (24x the memory of a 1-bit page: a 392-page scan got OOM-killed)
+        g = new.convert("L")
+        new = g.point(lambda v: 255 if v > 127 else 0, "1") if im.mode == "1" else g
     buf = io.BytesIO()
     save_fmt = fmt if fmt in ("PNG", "JPEG", "TIFF", "BMP", "GIF") else "PNG"
     if save_fmt == "JPEG" and new.mode not in ("RGB", "L"):

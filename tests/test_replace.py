@@ -129,3 +129,36 @@ def test_short_name_in_ole_property_set_replaced():
     for data in (lpstr, lpwstr):
         out, st = Replacer({"Tony": "Eqsc"}).apply(data)
         assert st.replaced == 1 and b"Tony" not in out and u16("Tony") not in out, data
+
+
+def test_short_keys_need_a_token_case_shape():
+    from deid.replace import Replacer
+    r = Replacer({"ZORB": "QAXE", "iZub": "rFeb"}, "global")
+    assert r.apply(b" ZORB ")[0] == b" QAXE " and r.apply(b" zorb ")[0] == b" qaxe " and r.apply(b" Zorb ")[0] == b" Qaxe "
+    assert r.apply(b"{ZoRb[bB")[0] == b"{ZoRb[bB"           # mixed-case run in binary noise: not a name
+    assert r.apply(b" iZub's ")[0] == b" rFeb's "           # the surface's own mixed casing is fine
+
+
+def test_one_byte_length_prefix_must_match_the_text_length():
+    from deid.replace import Replacer
+    r = Replacer({"Zorb": "Qaxe"}, "global")
+    assert r.apply(b"\x00hzorb.sldprt\x00")[0] == b"\x00hzorb.sldprt\x00"       # 'h' is a letter, not a length
+    assert r.apply(b"\x00\x0eZorb 2x4 Block\x00")[0] == b"\x00\x0eQaxe 2x4 Block\x00"   # real 1-byte length (14)
+
+
+def test_cad_format_vocabulary_is_never_rewritten():
+    from deid.replace import Replacer
+    r = Replacer({"ACAD_ZORB": "QXCD_ZORB", "SW-Zorbex": "HH-Qaxeso", "Quorvex": "Bandulo"}, "global")
+    assert r.apply(b"  3\nACAD_ZORB\n350\n")[0] == b"  3\nACAD_ZORB\n350\n"         # DXF dictionary name
+    assert r.apply(b'<prop name="SW-Zorbex">Quorvex</prop>')[0] == b'<prop name="SW-Zorbex">Bandulo</prop>'
+    u = "SW-Zorbex\x00".encode("utf-16-le")
+    assert r.apply(u)[0] == u                                                      # OLE property name (UTF-16)
+    assert r.apply(b" Quorvex ACAD ")[0] == b" Bandulo ACAD "
+
+
+def test_cp1252_bytes_are_not_delimiters_in_binary():
+    from deid.replace import Replacer
+    r = Replacer({"ZORB": "QAXE"}, "global")
+    blob = b"\x41\x42\x93ZORB\x94\x43\x44\x45\x46"        # cp1252 quote bytes around a short key in a binary run
+    assert r.apply(blob)[0] == blob
+    assert r.apply("“ZORB”".encode())[0] == "“QAXE”".encode()     # UTF-8 typographic quotes still delimit

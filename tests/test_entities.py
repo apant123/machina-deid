@@ -105,3 +105,27 @@ def test_casefold_length_change_keeps_widths():
     b.render("Wessels", Ent("a", Counter(person=1)), tm)
     out = b.render("Weßels", Ent("b", Counter(person=1)), tm)
     assert same_widths("Weßels", out)
+
+
+def test_field_scope_seed_and_initial_and_host_variants():
+    b = _builder()
+    k = b.add("Zim", "person", "manual", 0, tag="owner")
+    b.ents[k].tags.add("field_value")
+    e = b.ents[k]
+    row = b._row(e, "Zim", b.render("Zim", e, {}), b.__class__.__dict__ and __import__("deid.entities", fromlist=["dictionary"]).dictionary())
+    assert row["scope"] == "field"                     # a 3-letter author value: whole field only, not path-only
+    a = b.add("Mira Talvenk", "account", "field", 5, "author")
+    v = dict(b.variants(b.ents[a], {}))
+    first, last = v["Mira Talvenk"].split(" ")
+    assert v["M. Talvenk"] == f"{first[0]}. {last}" and v["M.Talvenk"] == f"{first[0]}.{last}"
+    h = b.add("QTALV6300\\mtalv", "account", "regex", 3, tag="hostuser")
+    hv = dict(b.variants(b.ents[h], {}))
+    assert hv["QTALV6300"] == hv["QTALV6300\\mtalv"].split("\\")[0]
+
+
+def test_exact_seed_does_not_merge_with_plain_word():
+    b = _builder()
+    b.add("Zorb", "org", "ner", 3)
+    k = b.add("ZORB®", "org", "manual", 0, tag="org_acronym", exact=True)
+    assert k != key("ZORB®") and list(b.ents[k].surfaces) == ["ZORB®"]
+    assert list(b.ents[key("Zorb")].surfaces) == ["Zorb"]

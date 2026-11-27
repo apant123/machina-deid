@@ -183,3 +183,244 @@ def test_pdf_embedded_file_content_and_name_rewritten(tmp_path):
         name = d.embfile_names()[0]
         assert d.embfile_get(name) == b"drawn by Ines Fintaro\n"
         assert d.embfile_info(name)["filename"] == "Bandulo_notes.txt"
+
+
+def _jpeg_pdf(path):
+    import pymupdf
+    from PIL import Image, ImageDraw
+    im = Image.new("RGB", (400, 300), "white")
+    ImageDraw.Draw(im).rectangle((250, 200, 380, 280), fill=(200, 30, 30))
+    buf = io.BytesIO(); im.save(buf, "JPEG", quality=95)
+    doc = pymupdf.open(); page = doc.new_page()
+    page.insert_image(pymupdf.Rect(50, 50, 450, 350), stream=buf.getvalue())
+    doc.save(path)
+    with pymupdf.open(path) as d:
+        xref = d[0].get_images(full=True)[0][0]
+        assert d[0].get_images(full=True)[0][8] == "DCTDecode"
+        return __import__("hashlib").sha256(pymupdf.Pixmap(d, xref).tobytes("png")).hexdigest()
+
+
+def test_pdf_jpeg_logo_uses_pixmap_png_cache_key(tmp_path):
+    from deid.rewrite.dispatch import Ctx
+    from deid.rewrite.pdf import rewrite_pdf
+    src, dst = tmp_path / "a.pdf", tmp_path / "b.pdf"
+    key = _jpeg_pdf(src)
+    o = rewrite_pdf(src, dst, Ctx(DM, logo_cache={key: [((250, 200, 380, 280), 0.5)]}, tmp=tmp_path))
+    assert o.status == "ok" and o.info["logos"] == 1 and o.info["logo_cache_miss"] == 0
+
+
+def test_pdf_logo_cache_miss_detects_live(tmp_path, monkeypatch):
+    from deid.rewrite import image as I
+    from deid.rewrite.dispatch import Ctx
+    from deid.rewrite.pdf import rewrite_pdf
+    src, dst = tmp_path / "a.pdf", tmp_path / "b.pdf"
+    _jpeg_pdf(src)
+    monkeypatch.setattr(I, "detect_logos", lambda work: [((250, 200, 380, 280), 0.5)])
+    o = rewrite_pdf(src, dst, Ctx(DM, logo_cache={"someotherimage": []}, tmp=tmp_path))
+    assert o.info["logo_cache_miss"] == 1 and o.info["logos"] == 1
+
+
+def test_whole_image_logo_and_signature_blanked(tmp_path):
+    import hashlib
+    from PIL import Image, ImageDraw
+    from deid.rewrite.dispatch import Ctx
+    from deid.rewrite.image import scrub_bytes
+    im = Image.new("RGB", (200, 80), "white")
+    ImageDraw.Draw(im).text((10, 30), "QUORVEX", fill=(20, 120, 40))
+    buf = io.BytesIO(); im.save(buf, "PNG"); data = buf.getvalue()
+    h = hashlib.sha256(data).hexdigest()
+    for kind in ("logo", "signature"):
+        new, info = scrub_bytes(data, Ctx(DM, logo_cache={h: []}, blank_images={h: kind}, tmp=tmp_path))
+        out = Image.open(io.BytesIO(new)).convert("RGB")
+        assert new != data and out.size == im.size
+        assert info.get("logos" if kind == "logo" else "signatures") == 1
+        assert out.getpixel((40, 38)) != (20, 120, 40)          # the mark is gone
+        if kind == "signature":
+            assert len(set(out.getdata())) == 1                # flat blank
+    plain = Image.new("RGB", (200, 80), "white")
+    ImageDraw.Draw(plain).text((10, 30), "BRACKET", fill=(20, 120, 40))
+    buf = io.BytesIO(); plain.save(buf, "PNG"); pdata = buf.getvalue()
+    ph = hashlib.sha256(pdata).hexdigest()
+    new, info = scrub_bytes(pdata, Ctx(DM, logo_cache={ph: []}, blank_images={h: "logo"}, tmp=tmp_path))
+    assert new == pdata                                          # not in the set, nothing mapped: untouched
+
+
+def test_pdf_whole_image_blank_uses_pixmap_png_key(tmp_path):
+    from deid.rewrite.dispatch import Ctx
+    from deid.rewrite.pdf import rewrite_pdf
+    src, dst = tmp_path / "a.pdf", tmp_path / "b.pdf"
+    key = _jpeg_pdf(src)
+    o = rewrite_pdf(src, dst, Ctx(DM, logo_cache={key: []}, blank_images={key: "logo"}, tmp=tmp_path))
+    assert o.status == "ok" and o.info["logos"] == 1 and o.info["images_replaced"] == 1
+
+
+def test_scrubbed_grey_and_bilevel_images_keep_their_mode(tmp_path):
+    import hashlib
+    from PIL import Image, ImageDraw
+    from deid.rewrite.dispatch import Ctx
+    from deid.rewrite.image import scrub_bytes
+    for mode in ("L", "1"):
+        im = Image.new(mode, (200, 80), 255)
+        ImageDraw.Draw(im).rectangle((20, 20, 120, 60), fill=0)
+        buf = io.BytesIO(); im.save(buf, "PNG"); data = buf.getvalue()
+        h = hashlib.sha256(data).hexdigest()
+        new, info = scrub_bytes(data, Ctx(DM, logo_cache={h: []}, blank_images={h: "logo"}, tmp=tmp_path))
+        assert info["logos"] == 1 and Image.open(io.BytesIO(new)).mode == mode
+
+
+def test_pdf_replacement_does_not_erase_neighbouring_lines(tmp_path):
+    import pymupdf
+    from deid.rewrite.dispatch import Ctx
+    from deid.rewrite.pdf import rewrite_pdf
+    src, dst = tmp_path / "a.pdf", tmp_path / "b.pdf"
+    doc = pymupdf.open(); page = doc.new_page()
+    page.insert_text((72, 100), "BRACKET INSTITUTE OF TECHNOLOGY", fontsize=10)
+    page.insert_text((72, 108), "QUORVEX PARTSVAULT INSTITUTE OF MECHANICS", fontsize=10)   # pitch < char bbox height
+    page.insert_text((72, 116), "SPROCKET UNIVERSITY GEAR GROUP", fontsize=10)
+    doc.save(src)
+    o = rewrite_pdf(src, dst, Ctx(DM, logo_cache={}, tmp=tmp_path))
+    with pymupdf.open(dst) as d:
+        txt = d[0].get_text("text")
+    assert o.info["text_replaced"] >= 1 and "QUORVEX" not in txt.upper()
+    assert "BRACKET INSTITUTE OF TECHNOLOGY" in txt and "SPROCKET UNIVERSITY GEAR GROUP" in txt
+    assert "INSTITUTE OF MECHANICS" in txt
+
+
+def _inline_image_pdf(path):
+    """A page with an INLINE image (BI ... ID ... EI, no xref) next to a text line."""
+    import pymupdf
+    doc = pymupdf.open(); page = doc.new_page()
+    page.insert_text((150, 120), "BRACKET INSTITUTE OF TECHNOLOGY", fontsize=10)
+    data = bytes([0, 255, 255, 0] * 4)
+    xref = page.get_contents()[0]
+    stream = doc.xref_stream(xref) + b"\nq 40 0 0 30 100 100 cm BI /W 4 /H 4 /CS /G /BPC 8 ID " + data + b" EI Q\n"
+    doc.update_stream(xref, stream)
+    doc.save(path)
+
+
+def test_inline_image_region_is_blanked_and_neighbour_text_kept(tmp_path):
+    import pymupdf
+    from deid.rewrite.dispatch import Ctx
+    from deid.rewrite.pdf import rewrite_pdf
+    src, dst = tmp_path / "a.pdf", tmp_path / "b.pdf"
+    _inline_image_pdf(src)
+    with pymupdf.open(src) as d:
+        infos = d[0].get_image_info(xrefs=True)
+        assert [i["xref"] for i in infos] == [0] and d[0].get_images() == []     # invisible to the xref image pass
+        rect = list(infos[0]["bbox"])
+    regs = {"blob": [dict(page=0, rect=rect, kind="logo", propagate=False)]}
+    o = rewrite_pdf(src, dst, Ctx(DM, logo_cache={}, vector_logos=regs, blob_sha="blob", tmp=tmp_path))
+    assert o.info["region_logos"] == 1
+    with pymupdf.open(dst) as d:
+        assert "BRACKET INSTITUTE OF TECHNOLOGY" in d[0].get_text("text")
+        pix = d[0].get_pixmap(clip=pymupdf.Rect(rect), dpi=72)
+        assert min(pix.samples) > 100                                         # the black image pixels are gone
+    o = rewrite_pdf(src, dst, Ctx(DM, logo_cache={}, vector_logos=regs, blob_sha="other", tmp=tmp_path))
+    assert "region_logos" not in o.info                                       # regions belong to their own blob
+
+
+def test_stage4_boundary_rules():
+    # typographic delimiters around short keys
+    assert DM.apply("the ZORB’s arm".encode()) == "the QAXE’s arm".encode()
+    assert DM.apply("ZORB® GmbH".encode()) == "QAXE® GmbH".encode()
+    assert DM.apply("“ZORB”".encode()) == "“QAXE”".encode()
+    assert DM.apply(b"\x9a\x12zorb\xae\x88") == b"\x9a\x12zorb\xae\x88"              # binary noise stays
+    # '<' glued to a preceding letter/digit is a CAD record, not markup; real tags stay protected
+    assert DM.apply(b"FAN_8X8<QUORVEX_FAN-0710>.PRT") == b"FAN_8X8<BANDULO_FAN-0710>.PRT"
+    assert DM.apply(b"<Quorvex attr='1'>") == b"<Quorvex attr='1'>"
+    # mixed letter+digit keys (>= 5 chars) need one hard edge
+    assert DM.apply(b"D:\\XQZ3Dlabs\\x") == b"D:\\WRT3Llabs\\x"
+    assert DM.apply(b"A3XQZ3DPaste-M01") == b"A3XQZ3DPaste-M01"                    # still soft on both sides
+
+
+def test_page_scan_renders_inline_images_in_bounded_batches(monkeypatch):
+    """Stage 4: a page with many inline images must not render every crop before classifying (OOM-killed workers)."""
+    import pymupdf
+    import deid.logo_clip as lc
+    import deid.vector_logo_scan as vs
+    doc = pymupdf.open(); page = doc.new_page()
+    page.insert_text((30, 60), "TITLE", fontsize=10)
+    data = bytes([0, 255, 255, 0] * 4)
+    xref = page.get_contents()[0]
+    imgs = b"".join(b"q 20 0 0 15 %d %d cm BI /W 4 /H 4 /CS /G /BPC 8 ID " % (30 + 25 * (i % 20), 100 + 20 * (i // 20))
+                    + data + b" EI Q\n" for i in range(75))
+    doc.update_stream(xref, doc.xref_stream(xref) + b"\n" + imgs)
+    alive, peak = [0], [0]
+    real_render = vs._render
+
+    def render(pg, clip=None):
+        alive[0] += 1; peak[0] = max(peak[0], alive[0])
+        return real_render(pg, clip)
+
+    def classify(ims):
+        alive[0] -= len(ims)
+        return [dict(logo=0.95, signature=0.0) for _ in ims]
+
+    monkeypatch.setattr(vs, "_render", render)
+    monkeypatch.setattr(lc, "classify", classify)
+    out = vs.scan_page(doc[0], vector=False)
+    assert len(out) == 75 and all(c["src"] == "inline" for c in out)
+    assert peak[0] <= vs.INLINE_BATCH
+
+
+def test_page_scan_records_jobs_of_dead_workers(tmp_path, monkeypatch):
+    import json
+    import deid.vector_logo_scan as vs
+    monkeypatch.setattr(vs, "INFLIGHT", tmp_path)
+    (tmp_path / "999999999").write_text(json.dumps(["abc", "sources/x.pdf"]))
+    (tmp_path / str(__import__("os").getpid())).write_text(json.dumps(["def", "sources/y.pdf"]))  # alive: kept
+    dead = vs._died()
+    assert [d["sha256"] for d in dead] == ["abc"] and dead[0]["error"] == vs.DIED
+    assert (tmp_path / str(__import__("os").getpid())).exists()
+
+
+def test_short_field_seed_needs_a_real_field_not_float_bytes():
+    """Stage 4: a 3-letter author seed matched '<qeB=' / '<QEb;' inside packed geometry (SolidWorks verifier)."""
+    dm = _dm(**{"field": {"Qeb": "Vom"}})
+    for noise in (b"+d\x0f<qeB=\x9b\xee", b"\x84\xc3&\xbc&\xe4\x83<QEb;H\xdd", b"\x9b<QEB;\x9b", b"\x01=Qeb,\x02"):
+        assert dm.apply(noise) == noise
+    assert dm.apply(b'Author="Qeb"') == b'Author="Vom"'
+    assert dm.apply(b"<Author>Qeb</Author>") == b"<Author>Vom</Author>"
+    assert dm.apply(b"/Author (Qeb)") == b"/Author (Vom)"
+    assert dm.apply(b"\x00\x00\x00\x04\x00\x00\x00Qeb\x00") == b"\x00\x00\x00\x04\x00\x00\x00Vom\x00"   # VT_LPSTR
+    assert dm.apply("'Qeb'".encode("utf-16-le")) == "'Vom'".encode("utf-16-le")
+    assert dm.apply(b"Author;Qeb;2024-01-02") == b"Author;Vom;2024-01-02"     # loose delimiters in plain text: kept
+    assert dm.apply(b"Author;qEB;2024") == b"Author;qEB;2024"                 # token casing required
+    mfc = b"\xff\xfe\xff\x03" + "Qeb".encode("utf-16-le")
+    assert dm.apply(b"Array\x01\x00" + mfc + b"\x05\x80\x01\x00") == b"Array\x01\x00\xff\xfe\xff\x03" + "Vom".encode("utf-16-le") + b"\x05\x80\x01\x00"
+    assert dm.apply(b"\x03\x00\x00\x00" + "Qeb".encode("utf-16-le") + b"\x80\x0c") == b"\x03\x00\x00\x00" + "Vom".encode("utf-16-le") + b"\x80\x0c"
+    assert dm.apply(b"FORMAT=x;\nUSER=Qeb\nMODE=b") == b"FORMAT=x;\nUSER=Vom\nMODE=b"
+
+
+def test_page_scan_render_is_capped_on_huge_pages(monkeypatch):
+    import pymupdf
+    import deid.vector_logo_scan as vs
+    doc = pymupdf.open(); page = doc.new_page(width=30000, height=30000)  # ~417 in square: 1.7 GP at 100 dpi
+    im = vs._render(page)
+    assert im.width * im.height <= vs.MAX_PIXELS
+    strip = doc.new_page(width=20000, height=300)                         # elongated: OWLv2 input side capped
+    seen = []
+    monkeypatch.setattr("deid.rewrite.image.detect_logos", lambda im: seen.append(im.size) or [])
+    vs.scan_page(strip, vector=True)
+    assert seen and max(seen[0]) <= vs.MAX_SIDE
+
+
+def test_region_blank_removes_stamp_annotation_logo(tmp_path):
+    """Stage 4: a logo stored as a Stamp annotation is drawn on top of the page: the region blank must remove it."""
+    import pymupdf
+    from deid.rewrite.dispatch import Ctx
+    from deid.rewrite.pdf import rewrite_pdf
+    src, dst = tmp_path / "a.pdf", tmp_path / "b.pdf"
+    doc = pymupdf.open(); page = doc.new_page()
+    page.insert_text((150, 300), "BRACKET INSTITUTE OF TECHNOLOGY", fontsize=10)
+    stamp = page.add_stamp_annot(pymupdf.Rect(100, 100, 220, 140), stamp=0)
+    stamp.set_colors(stroke=(1, 0, 0)); stamp.update()
+    page.add_text_annot((400, 400), "review note")                 # elsewhere on the page: kept
+    doc.save(src)
+    regs = {"blob": [dict(page=0, rect=[100, 100, 220, 140], kind="logo", propagate=False)]}
+    o = rewrite_pdf(src, dst, Ctx(DM, logo_cache={}, vector_logos=regs, blob_sha="blob", tmp=tmp_path))
+    assert o.info["region_annots_removed"] == 1
+    with pymupdf.open(dst) as d:
+        assert [a.type[1] for a in d[0].annots()] == ["Text"]
+        s = d[0].get_pixmap(clip=pymupdf.Rect(100, 100, 220, 140), dpi=72).samples
+        assert not any(s[i] > 150 and s[i + 1] < 90 for i in range(0, len(s) - 2, 3))   # no red stamp left
