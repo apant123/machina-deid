@@ -80,3 +80,14 @@ Policy lists (tools kept, vendors replaced, generic accounts, infrastructure dom
 the code bucket. See [docs/STAGE2.md](docs/STAGE2.md).
 
 Before uploading code or docs anywhere: `python -m deid.code_leak_check` must print `no leaks`. It scans the repo for every distinctive original name in the map, and for their pseudonyms. The vendor gazetteer, the reviewer seeds and the probes live in `<DATA_DIR>/entities/` (private). `r2_audit.json` is never shipped.
+
+## Stage 3: rewrite (see docs/STAGE3.md)
+```
+Xvfb :99 -screen 0 1024x768x24 -nolisten tcp &           # ODA File Converter needs a display
+.venv312/bin/python -m deid.logo_scan extract --workers 15  # unique raster images (private dir)
+.venv312/bin/python -m deid.logo_scan detect  --workers 15  # OWLv2 logo detections, cached by image sha256
+.venv312/bin/python -m deid.logo_scan sheet                 # contact sheets for the threshold review
+.venv312/bin/python -m deid.rewrite_run plan                # renamed keys + collision check
+.venv312/bin/python -m deid.rewrite_run run --workers 14    # rewrite -> output bucket (resumable)
+.venv312/bin/python -m deid.rewrite_run report              # per-format status, quarantine list
+```

@@ -153,6 +153,13 @@ keep_tools:
 
 # --- kept: standards, licences, generic engineering / document vocabulary -------------------
 keep_terms:
+  - The VBA Project   # default VBA project name in Office / CAD macros
+  - VBA
+  - Interp
+  - Jack Stand        # workshop tool, NER-tagged as a person
+  - JStand
+  - Alu Carre         # French aluminium profile names (carré / cornière)
+  - Alu Corniere
   - ISO
   - DIN
   - ANSI

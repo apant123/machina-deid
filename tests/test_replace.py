@@ -111,7 +111,7 @@ def test_short_key_replaced_as_whole_string():
 
 def test_residual_ignores_binary_and_flags_text_variants():
     r = Replacer({"teodo": "Abcde", "rje": "qbx"})
-    data = b"\x9a\x12teodo\x88\x01" + b"Desktop\\1103847_Teodorico_Vallemo\\part"
+    data = b"\x9a\x12teodo\x88\x01" + b"Desktop\\9900417_Teodorico_Vallemo\\part"
     out, _ = r.apply(data)
     assert r.residual(out) == ["teodo"]           # the longer real name in text is flagged
     assert r.residual(b"\x9a\x12rje\x88\x01\x02") == []   # binary noise ignored

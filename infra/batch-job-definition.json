@@ -1,0 +1,22 @@
+{
+  "jobDefinitionName": "machina-deid-rewrite",
+  "type": "container",
+  "platformCapabilities": ["EC2"],
+  "retryStrategy": {"attempts": 2, "evaluateOnExit": [{"onStatusReason": "Host EC2*", "action": "RETRY"}, {"onReason": "*", "action": "EXIT"}]},
+  "timeout": {"attemptDurationSeconds": 21600},
+  "containerProperties": {
+    "image": "<account>.dkr.ecr.us-east-2.amazonaws.com/machina-deid:latest",
+    "command": ["python", "-m", "deid.rewrite_run", "run", "--workers", "14", "--formats", "Ref::formats"],
+    "resourceRequirements": [{"type": "VCPU", "value": "16"}, {"type": "MEMORY", "value": "30000"}],
+    "jobRoleArn": "arn:aws:iam::<account>:role/machina-deid-batch",
+    "environment": [
+      {"name": "AWS_REGION", "value": "us-east-2"},
+      {"name": "STAGING_BUCKET", "value": "machina-deid-raw-arav-065371277807"},
+      {"name": "OUTPUT_BUCKET", "value": "machina-deid-output-arav-065371277807"}
+    ],
+    "secrets": [{"name": "DEID_SEED", "valueFrom": "arn:aws:secretsmanager:us-east-2:<account>:secret:machina-deid/seed"}],
+    "mountPoints": [{"sourceVolume": "scratch", "containerPath": "/data"}],
+    "volumes": [{"name": "scratch", "host": {"sourcePath": "/scratch"}}]
+  },
+  "parameters": {"formats": ""}
+}

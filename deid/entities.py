@@ -330,7 +330,8 @@ class Builder:
         rows = duckdb.sql(f"""SELECT kind, value, n_blobs FROM read_parquet('{HARVEST_DIR}/strings.parquet')
             WHERE regexp_matches(kind, '{PERSON_FIELDS.pattern.replace("'", "''")}')
                OR regexp_matches(kind, '{ORG_FIELDS.pattern.replace("'", "''")}')
-               OR (kind LIKE '%image.meta' AND value LIKE 'vti_author:%')""").fetchall()
+               OR (kind LIKE '%image.meta' AND value LIKE 'vti_author:%')
+            ORDER BY 1, 2""").fetchall()
         for kind, v, nb in rows:
             if v.startswith("vti_author:"):
                 v = v.split("|", 1)[-1]
@@ -377,7 +378,9 @@ class Builder:
         while len(core) > 1 and (core[0] in SUBDOMAIN_KEEP or core[0].isdigit() or len(core[0]) < 2 or
                                  core[0] in ("pricing", "repos", "scripts", "focus", "cam1", "katalog", "motioncontrolsystems")):
             core = core[1:]
-        return ".".join(core + labels[-n_suffix:]) if core and core[-1] not in SUBDOMAIN_KEEP else None
+        if not core or core[-1] in SUBDOMAIN_KEEP or len(core[-1]) <= 2:  # 'ns.ad' (ns.adobe.com noise), 'x.io'
+            return None
+        return ".".join(core + labels[-n_suffix:])
 
     def domain(self, host: str, nb: int, source: str):
         host = host.lower().strip(".")
@@ -393,7 +396,7 @@ class Builder:
         con.execute("SET memory_limit='12GB'")
         vals = f"read_parquet('{HARVEST_DIR}/values.parquet')"
         for e, nb in con.execute(rf"""SELECT e, sum(n_blobs) FROM (SELECT unnest(regexp_extract_all(value,
-                '{EMAIL_RX.pattern}')) e, n_blobs FROM {vals} WHERE contains(value, '@')) GROUP BY 1""").fetchall():
+                '{EMAIL_RX.pattern}')) e, n_blobs FROM {vals} WHERE contains(value, '@')) GROUP BY 1 ORDER BY 1""").fetchall():
             self.email(e, nb, "regex")
         # drive-rooted Windows profiles, or /home|/Users at the start of a Unix path (no free-floating matches)
         prof = (r"(?:(?:^|[^A-Za-z0-9])[A-Za-z]:[\\/](?:Users|USERS|users|Documents and Settings|DOCUME~1|Dokumente und Einstellungen|"
@@ -401,12 +404,12 @@ class Builder:
                 r"([A-Za-z0-9][A-Za-z0-9._ ~-]{0,39}|[^\x00-\x7f\\/:*?\"<>|]{1,20})[\\/]")
         for u, nb in con.execute(f"""SELECT u, sum(n_blobs) FROM (SELECT unnest(regexp_extract_all(value, '{prof.replace("'", "''")}', 1)) u,
                 n_blobs FROM {vals} WHERE regexp_matches(value, '(?i)users|settings|/home/|einstellungen|usuarios|utilisateurs|gebruikers|utenti|benutzer'))
-                GROUP BY 1""").fetchall():
+                GROUP BY 1 ORDER BY 1""").fetchall():
             u = u.strip()
             if "~" in u:
                 self.short_names.append((u, nb))  # 8.3 names, linked to their long form below
             elif re.search(r"[^\W\d_]", u) or re.fullmatch(r"\d{4,}", u):
-                if u.lower() not in PROFILE_SPECIAL:
+                if u.lower() not in PROFILE_SPECIAL and len(set(u.lower())) > 2:  # not 'IIIIIIII' padding
                     toks = u.split()
                     person = len(toks) >= 2 and all(t[:1].isupper() and t.isalpha() for t in toks)
                     self.add(u, "person" if person else "account", "regex", nb, "profile folder", tag="profile")
@@ -414,17 +417,18 @@ class Builder:
                 self.add(u, "account", "regex", nb, "profile folder (id)", tag="profile")
         for u, nb in con.execute(rf"""SELECT u, sum(n_blobs) FROM (SELECT unnest(regexp_extract_all(value,
                 '(?i)(?:https?://|www\.)[a-z0-9-]+(?:\.[a-z0-9-]+)+(?:/[A-Za-z0-9_.~-]+)?')) u, n_blobs FROM {vals}
-                WHERE regexp_matches(value, '(?i)https?://|www\.')) GROUP BY 1""").fetchall():
+                WHERE regexp_matches(value, '(?i)https?://|www\.')) GROUP BY 1 ORDER BY 1""").fetchall():
             self.url(u, nb, "regex")
         # OneDrive - <Org> sync roots
         for o, nb in con.execute(r"""SELECT o, sum(n_blobs) FROM (SELECT unnest(regexp_extract_all(value,
                 'OneDrive - ([^\\/]{2,60})[\\/]', 1)) o, n_blobs FROM """ + vals + """ WHERE contains(value, 'OneDrive - '))
-                GROUP BY 1""").fetchall():
+                GROUP BY 1 ORDER BY 1""").fetchall():
             self.add(o, "org", "regex", nb, "OneDrive tenant")
         # phones in human text only (field values handled above)
         for v, nb in con.execute(rf"""SELECT value, n_blobs FROM read_parquet('{HARVEST_DIR}/strings.parquet')
                 WHERE regexp_matches(kind, '^(pdf\.text|svg\.text|text\.(txt|md|html\.text)|dxf\.c1|dwg\.c1|ocr)')
-                  AND regexp_matches(value, '(?i)(tel|phone|fax|mobile|mob|cell|☎)[.:\s]')""").fetchall():
+                  AND regexp_matches(value, '(?i)(tel|phone|fax|mobile|mob|cell|☎)[.:\s]')
+                ORDER BY 1, 2""").fetchall():
             for m in PHONE_RX.finditer(v):
                 if len(re.sub(r"\D", "", m.group())) >= 9:
                     self.add(m.group(), "phone", "regex", nb, v)
@@ -444,10 +448,12 @@ class Builder:
         dic = dictionary()
         rows = duckdb.sql(f"""
             SELECT s.text, s.label, max(s.score) mx, avg(s.score) av, count(DISTINCT s.tid) nt, sum(i.nb) nb,
-                   list(DISTINCT k)[1:6] kinds, any_value(i.text) ex
+                   list_sort(list(DISTINCT k))[1:6] kinds,
+                   list_sort(list(DISTINCT i.text))[1:20] exs
             FROM read_parquet('{NER_DIR}/spans-*.parquet') s JOIN read_parquet('{NER_DIR}/input.parquet') i USING (tid),
                  unnest(i.kinds) t(k)
-            GROUP BY 1, 2""").fetchall()
+            GROUP BY 1, 2
+            ORDER BY 1, 2""").fetchall()  # deterministic: sorted rows, sorted example lists (no any_value)
         best: dict[str, list] = {}
         for text, label, mx, av, nt, nb, kinds, ex in rows:
             k = key(text)
@@ -457,8 +463,15 @@ class Builder:
             else:
                 b[4] += nt
                 b[5] += nb
-        for text, label, mx, av, nt, nb, kinds, ex in best.values():
-            ok, why, etype = self.accept_span(text, label, mx, nt, dic, ex)
+        for text, label, mx, av, nt, nb, kinds, exs in best.values():
+            # accepted when ANY source string is human text (a name seen once in prose is still a name)
+            for ex in exs:
+                ok, why, etype = self.accept_span(text, label, mx, nt, dic, ex)
+                if ok:
+                    break
+            else:
+                ex = exs[0]
+                ok, why, etype = self.accept_span(text, label, mx, nt, dic, ex)
             if ok:
                 self.add(text, etype, "ner", nb, f"{label}:{mx:.2f} '{ex[:100]}'")
             else:
@@ -523,7 +536,7 @@ class Builder:
             if len(words) == 1 and caps and nondict and score >= 0.85 and len(words[0]) >= 4:
                 return True, "", etype
             return False, "person: single token / low score / not capitalised", etype
-        if ORG_SUFFIX.search(t) and score >= 0.5 and (nondict or len(words) >= 2 and caps and score >= 0.7):
+        if ORG_SUFFIX.search(t) and score >= 0.5 and nondict:  # 'TECHNISCHE UNIVERSITÄT' alone is generic
             return True, "", etype
         if len(toks) >= 2 and all(x.isupper() for x in toks) and score < 0.9:
             return False, "all-caps code / abbreviation chain ('HDWR-HYDR-MASTFIT')", etype
@@ -557,7 +570,7 @@ class Builder:
         toks = [t for t in TOKEN_RX.findall(surface) if not t.isdigit()]
         if CJK_RANGE.search(surface):
             return len(surface) <= 1
-        return k.isdigit() or len(toks) <= 1 and (len(k) <= 3 or bool(toks) and toks[0].lower() in dictionary())
+        return k.isdigit() or len(k) <= 3 or len(toks) <= 1 and bool(toks) and toks[0].lower() in dictionary()
 
     def prune(self):
         """Weak single tokens need strong evidence: a profile folder / repo owner / HOST\\user / URL owner,
@@ -772,7 +785,7 @@ class Builder:
         k = key(s)
         scope = "field" if e.type not in ("phone", "email", "domain") and self.weak(k, s) else "global"
         if scope == "field" and (e.type == "vendor" and len(k) >= 4 or "org_acronym" in e.tags and s.isupper() and len(k) >= 3):
-            scope = "global"  # deliberate gazetteer vendors (Lego, igus) / org acronyms (DTU): Replacer still
+            scope = "global"  # deliberate gazetteer vendors (4-letter brands) / org acronyms (3-letter universities): Replacer still
             #                   only replaces keys <= 4 chars as whole delimited strings
         if scope == "field" and len(k) <= 3 and not CJK_RANGE.search(s):
             scope = "path"  # profile-folder / repo-owner component only
